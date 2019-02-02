@@ -1,0 +1,11 @@
+HoloPlay SDK Quickstart Guide
+
+Drag the HoloPlay Capture prefab into your scene, or in the hierarchy click Create->HoloPlay Capture
+
+Use the Size property to set the size of the capture volume.
+
+To set up the live preview, first, in the toolbar at the top click HoloPlay->Preview Settings. Then check your OS display settings to see how your displays are laid out. In the HoloPlay Preview Setting panel, select a preset or manually enter the x and y values to move the HoloPlay Display window relative to your main display so it is exactly as it is in your OS display settings. Then click Toggle Preview.
+
+The preview can be toggled on or off with CTRL + E (cmd + e on Mac). Occasionally, you will have to toggle the window a couple times before it shows correctly.
+
+For more advanced features and documentation, visit https://lookingglassfactory.com
