@@ -6,9 +6,12 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 0
-    path: Assets/Scenes/SampleScene.unity
-    guid: 99c9720ab356a0642a771bea13969a05
+    path: 
+    guid: 00000000000000000000000000000000
   - enabled: 1
     path: Assets/LookingGlassQuiltViewer.unity
     guid: 6e7bf3cd8a401d24a846d61bc5efcfe1
+  - enabled: 0
+    path: Assets/HoloPlay/example scene.unity
+    guid: 51f66a384690df645aeb88e3afa33d01
   m_configObjects: {}
