@@ -241,7 +241,7 @@ namespace Kirurobo
 
             // ウィンドウ枠が復活している場合があるので監視するため、呼ぶ
             if (uniWin != null) {
-				uniWin.Update();
+                uniWin.Update();
             }
         }
 
@@ -608,6 +608,17 @@ namespace Kirurobo
                 if (uniWin != null) {
                     uniWin.Dispose();
                 }
+            }
+        }
+
+        /// <summary>
+        /// 自分のウィンドウにフォーカスを与える
+        /// </summary>
+        public void Focus()
+        {
+            if (uniWin != null)
+            {
+                uniWin.SetFocus();
             }
         }
     }

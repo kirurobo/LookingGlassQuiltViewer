@@ -153,6 +153,9 @@ namespace Kirurobo
         public static extern bool EnableWindow(IntPtr hWnd, bool bEnable);
 
         [DllImport("user32.dll")]
+        public static extern IntPtr SetFocus(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
         public static extern bool IsIconic(IntPtr hWnd);
 
         [DllImport("user32.dll")]
