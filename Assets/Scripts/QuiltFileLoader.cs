@@ -236,17 +236,28 @@ public class QuiltFileLoader : MonoBehaviour
             Debug.Log("Index: " + currentIndex);
         }
 
+        Debug.Log("Current index: " + currentIndex + "  Step: " + step);
         int index = currentIndex + step;
-        if ((index < 0) || (currentIndex >= (files.Count - 1) && step > 0))
+        if ((currentIndex >= (files.Count - 1)) && (step > 0))
         {
-            // インデックスが0より小さくなったか、最後のファイル表示中にさらに次を押されたら、先頭とする
+            // 最後のファイル表示中にさらに次を押されたら、最初に送る
             index = 0;
         }
-        else if ((index >= files.Count) || (currentIndex == 0 && step < 0))
+        else if ((currentIndex == 0) && (step < 0))
         {
-            // インデックスがリストを超えたか、最初のファイル表示中にさらに前を押されたら、最後に送る
+            // 最初のファイル表示中にさらに前を押されたら、最後に送る
             index = files.Count - 1;
         }
+
+        if (index < 0)
+        {
+            // インデックスが0より小さくなったら、先頭とする
+            index = 0;
+        }
+        else if (index >= files.Count) {
+            // インデックスがリストを超えたら、最後に送る
+            index = files.Count - 1;
+        } 
         return files[index];
     }
 
