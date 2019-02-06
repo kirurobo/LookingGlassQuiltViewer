@@ -1,9 +1,11 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using UnityEngine;
 using UnityEngine.UI;
 using Kirurobo;
 using HoloPlay;
+using SFB;
 
 public class QuiltFileLoader : MonoBehaviour
 {
@@ -12,29 +14,33 @@ public class QuiltFileLoader : MonoBehaviour
     Quilt quilt;
     Quilt.Tiling defaultTiling;
 
-    public RenderTexture renderTexture;
-    public GameObject holoplayCapture;
-    public GameObject holoplayUiCamera;
     public Text messageText;
 
-    bool isHoloPlayCaptureActivated = false;
+    /// <summary>
+    /// 読み込み待ちならtrueにする
+    /// </summary>
+    bool isLoading = false;
 
-    float messageClearTime = 0;     // メッセージを表示した場合、それを消去する時刻を入れておく
+    /// <summary>
+    /// メッセージを表示した場合、それを消去する時刻[s]を入れる
+    /// </summary>
+    float messageClearTime = 0;
+
+    /// <summary>
+    /// スライドショー対象の指定ファイル。
+    /// これが空ならば現在開いたファイルと同じディレクトリを探す。
+    /// </summary>
+    List<string> targetFiles = new List<string>();
+
+    /// <summary>
+    /// 現在表示されている画像ファイルのパス
+    /// </summary>
+    string currentFile;
+
 
     // Use this for initialization
     void Start()
     {
-        // HoloPlay Captureのオブジェクトを取得
-        if (!holoplayCapture)
-        {
-            holoplayCapture = FindObjectOfType<Capture>().gameObject;
-        }
-
-        if (!holoplayUiCamera)
-        {
-            holoplayUiCamera = FindObjectOfType<ExtendedUICamera>().gameObject;
-        }
-
         // ファイルドロップなどを扱うためのWindowControllerインスタンスを取得
         window = FindObjectOfType<WindowController>();
         window.OnFilesDropped += Window_OnFilesDropped;
@@ -43,36 +49,57 @@ public class QuiltFileLoader : MonoBehaviour
         quilt = FindObjectOfType<Quilt>();
         defaultTiling = quilt.tiling;   // Tilingの初期設定を記憶しておく
 
-        // バックグラウンド実行を無効にする
-        Application.runInBackground = false;
-
         // フレームレートを下げる
         Application.targetFrameRate = 15;
+
+        // サンプルの画像を読み込み
+        LoadFile(Path.Combine(Application.streamingAssetsPath, "startup.png"));
     }
 
     void Update()
     {
-        // [O] キーまたは右クリックでファイル選択ダイアログを開く
-        if (Input.GetKey(KeyCode.O) || Input.GetMouseButton(1)) {
-            OpenFile();
-        }
-
-        // [S] キーで現在の画面を保存
-        if (Input.GetKey(KeyCode.S))
+        // 操作できるのはファイル読み込み待ちでないときだけ
+        if (!isLoading)
         {
-            SaveFile();
-        }
+            // [O] キーまたは右クリックでファイル選択ダイアログを開く
+            if (Input.GetKey(KeyCode.O) || Input.GetMouseButton(1))
+            {
+                OpenFile();
+            }
 
-        // HoloPlayの処理が有効だったなら、無効にする
-        if (isHoloPlayCaptureActivated)
-        {
-            holoplayCapture.SetActive(false);
-            holoplayUiCamera.SetActive(false);
+            // [S] キーで現在の画面を保存
+            if (Input.GetKey(KeyCode.S))
+            {
+                SaveFile();
+            }
 
-            isHoloPlayCaptureActivated = false;
+            //// [T] キーでウィンドウ透過
+            //if (Input.GetKey(KeyCode.T))
+            //{
+            //    if (window)
+            //    {
+            //        window.isTransparent = !window.isTransparent;
+            //    }
+            //}
 
-            // バックグラウンド実行を無効に戻す
-            Application.runInBackground = false;
+            // 前の画像
+            if (Buttons.GetButton(ButtonType.LEFT) || Input.GetKey(KeyCode.LeftArrow))
+            {
+                ShowMessage("");    // ファイル名が表示されていれば消す
+                LoadFile(GetNextFile(-1));
+            }
+
+            // 次の画像
+            if (Buttons.GetButton(ButtonType.RIGHT) || Input.GetKey(KeyCode.RightArrow))
+            {
+                ShowMessage("");    // ファイル名が表示されていれば消す
+                LoadFile(GetNextFile(1));
+            }
+
+            if (Buttons.GetButton(ButtonType.CIRCLE))
+            {
+                ShowMessage(currentFile);
+            }
         }
 
         // メッセージを一定時間後に消去
@@ -87,21 +114,36 @@ public class QuiltFileLoader : MonoBehaviour
     }
 
     /// <summary>
+    /// 一定時間で消えるメッセージを表示
+    /// </summary>
+    /// <param name="text"></param>
+    private void ShowMessage(string text)
+    {
+        const float lifetime = 5f;  // 消去までの時間[s]
+
+        if (messageText)
+        {
+            messageText.text = text;
+            messageClearTime = Time.time + lifetime;
+        }
+    }
+
+    /// <summary>
     /// 現在の画面をPNGで保存
     /// </summary>
     private void SaveFile()
     {
         // 現在のRenderTextureの内容からTexture2Dを作成
-        RenderTexture currentRenderTexture = RenderTexture.active;
-        RenderTexture.active = renderTexture;
-        Texture2D texture = new Texture2D(renderTexture.width, renderTexture.height, TextureFormat.ARGB32, false);
-        texture.ReadPixels(new Rect(0, 0, texture.width, texture.height), 0, 0);
+        RenderTexture renderTexture = RenderTexture.active;
+        int w = Screen.width;
+        int h = Screen.height;
+        Texture2D texture = new Texture2D(w, h, TextureFormat.ARGB32, false);
+        texture.ReadPixels(new Rect(0, 0, w, h), 0, 0);
         texture.Apply();
-        RenderTexture.active = currentRenderTexture;
 
         // PNGに変換
         byte[] rawData = texture.EncodeToPNG();
-        Object.Destroy(texture);
+        Destroy(texture);
 
         // 日時を基にファイル名を決定
         string file = "LookingGlass_" + System.DateTime.Now.ToString("yyyyMMdd_hhmmss") + ".png";
@@ -111,11 +153,101 @@ public class QuiltFileLoader : MonoBehaviour
         Debug.Log("Saved " + file);
 
         // 保存したというメッセージを表示
-        if (messageText)
-        {
-            messageText.text = "Saved " + file;
-            messageClearTime = Time.time + 5f;      // 5秒後にメッセージ消去とする
+        ShowMessage("Saved " + file);
+    }
+
+    /// <summary>
+    /// 画像を読み込み
+    /// </summary>
+    /// <param name="uri">Path.</param>
+    private void LoadFile(string path) {
+        if (string.IsNullOrEmpty(path)) return;
+
+        isLoading = true;
+        currentFile = path;
+
+        string uri = new System.Uri(path).AbsoluteUri;
+        Debug.Log("Loading: " + uri);
+        StartCoroutine("LoadFileCoroutine", uri);
+    }
+
+    /// <summary>
+    /// コルーチンでファイル読み込み
+    /// </summary>
+    /// <param name="file"></param>
+    /// <returns></returns>
+    IEnumerator LoadFileCoroutine(string file)
+    {
+        WWW www = new WWW(file);
+        yield return www;
+
+        // 前のtextureを破棄
+        Destroy(texture);
+
+        // Quiltを読み込み
+        texture = www.texture;
+        quilt.tiling = GetTilingType(texture);
+        quilt.overrideQuilt = texture;
+        quilt.SetupQuilt();
+
+        // 念のため毎回GCをしてみる…
+        System.GC.Collect();
+
+        Debug.Log("Estimaged tiling: " + quilt.tiling.presetName);     // 選択されたTiling
+
+        // 読み込み完了
+        isLoading = false;
+    }
+
+    /// <summary>
+    /// スライドショーでの次のファイルパスを返す
+    /// </summary>
+    /// <returns>path</returns>
+    /// <param name="step">1なら１つ次、-1なら１つ前</param>
+    private string GetNextFile(int step) {
+        List<string> files;
+        int currentIndex = 0;
+
+        if (targetFiles.Count > 0) {
+            // 対象ファイルが指定されている場合はそのリストをたどる
+            currentIndex = targetFiles.IndexOf(currentFile);
+            files = targetFiles;
+        } else {
+            // 対象ファイル指定なしならば、現在のファイルと同じディレクトリから一覧を取得
+            //   利便性のため、毎回一覧を取得
+            string directory = Path.GetDirectoryName(currentFile);
+            string filename = Path.GetFileName(currentFile);
+            files = new List<string>();
+
+            string[] allFiles = Directory.GetFiles(directory);
+            foreach (string path in allFiles) {
+                string ext = Path.GetExtension(path).ToLower();
+                if (ext == ".png" || ext == ".jpg" || ext == ".jpeg") {
+                    files.Add(path);
+                    if (Path.GetFileName(path) == filename) {
+                        currentFile = path;
+                    }
+                    Debug.Log(path);
+                }
+            }
+
+            files.Sort();
+            currentIndex = files.IndexOf(currentFile);
+            Debug.Log("Index: " + currentIndex);
         }
+
+        int index = currentIndex + step;
+        if ((index < 0) || (currentIndex >= (files.Count - 1) && step > 0))
+        {
+            // インデックスが0より小さくなったか、最後のファイル表示中にさらに次を押されたら、先頭とする
+            index = 0;
+        }
+        else if ((index >= files.Count) || (currentIndex == 0 && step < 0))
+        {
+            // インデックスがリストを超えたか、最初のファイル表示中にさらに前を押されたら、最後に送る
+            index = files.Count - 1;
+        }
+        return files[index];
     }
 
     /// <summary>
@@ -123,10 +255,18 @@ public class QuiltFileLoader : MonoBehaviour
     /// </summary>
     private void OpenFile()
     {
-        string path = window.ShowOpenFileDialog("Quilt images|*.png;*.jpg;*.jpeg");
+        // Standalone File Browserを利用
+        var extensions = new[] {
+                new ExtensionFilter("Image Files", "png", "jpg", "jpeg" ),
+                new ExtensionFilter("All Files", "*" ),
+            };
+        string[] files = StandaloneFileBrowser.OpenFilePanel("Open File", "", extensions, false);
+        if (files.Length < 1) return;
+
+        string path = files[0];
         if (!string.IsNullOrEmpty(path))
         {
-            StartCoroutine("LoadQuiltFile", path);
+            LoadFile(path);
         }
     }
 
@@ -136,38 +276,26 @@ public class QuiltFileLoader : MonoBehaviour
     /// <param name="files"></param>
     private void Window_OnFilesDropped(string[] files)
     {
-        // 一時的にバックグラウンド実行を有効にする
-        Application.runInBackground = true;
+        // 自分のウィンドウにフォーカスを与える
+        window.Focus();
 
-        if (files.Length > 0)
-        {
-            // 最初のファイルだけ読み込み
-            StartCoroutine("LoadQuiltFile", files[0]);
+        if (files.Length == 1) {
+            // 一つだけドロップの場合はスライドショーリストを消去
+            targetFiles.Clear();
+
+            // ファイルだけ読み込み
+            LoadFile(files[0]);
         }
-    }
+        else if (files.Length > 1)
+        {
+            // 複数のファイルがあれば、それらをスライドショー対象とする
+            targetFiles.Clear();
+            targetFiles.AddRange(files);
+            targetFiles.Sort();
 
-    /// <summary>
-    /// コルーチンでファイル読み込み
-    /// </summary>
-    /// <param name="file"></param>
-    /// <returns></returns>
-    IEnumerator LoadQuiltFile(string file)
-    {
-        Debug.Log(file);
-        WWW www = new WWW(file);
-        yield return www;
-
-        // レンダリングのため、HoloPlayのオブジェクトを有効化
-        holoplayCapture.SetActive(true);
-        holoplayUiCamera.SetActive(true);
-
-        // Quiltを読み込み
-        texture = www.texture;
-        quilt.tiling = GetTilingType(texture);
-        quilt.overrideQuilt = texture;
-        quilt.SetupQuilt();
-        isHoloPlayCaptureActivated = true;
-        Debug.Log("Estimaged tiling: " + quilt.tiling.presetName);     // 選択されたTiling
+            // 最初のファイルだけ読み込み
+            LoadFile(targetFiles[0]);
+        }
     }
 
     /// <summary>
@@ -210,7 +338,7 @@ public class QuiltFileLoader : MonoBehaviour
         float[] score = new float[tilingPresets.Count];
 
         // 相関をとる周期の調整値。1だと全ピクセルについて相関をとるが遅い。
-        int skip = 4;
+        int skip = texture.width / 512;     // 4;
 
         int index = 0;
         foreach (var preset in tilingPresets)
@@ -252,7 +380,7 @@ public class QuiltFileLoader : MonoBehaviour
         float minScore = float.MaxValue;
         for (int i = 0; i < tilingPresets.Count; i++)
         {
-            Debug.Log(tilingPresets[i].presetName + " : " + score[i]);
+            //Debug.Log(tilingPresets[i].presetName + " : " + score[i]);
 
             if (minScore > score[i])
             {
