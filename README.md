@@ -12,6 +12,6 @@ A tiled (quilt) image viewer for the Looking Glass
 Copyright 2017-18 Looking Glass Factory Inc. All rights reserved.
 
 ## UnityStandaloneFileBrowser
-Copyright (c) 2017 Gökhan Gökçe
-Released under the MIT License
-https://github.com/gkngkc/UnityStandaloneFileBrowser/blob/master/LICENSE.txt
+Copyright (c) 2017 Gökhan Gökçe  
+Released under the MIT License  
+https://github.com/gkngkc/UnityStandaloneFileBrowser/blob/master/LICENSE.txt  
