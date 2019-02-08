@@ -205,7 +205,7 @@ namespace Kirurobo
             // エディタのウィンドウ配置が変化した際の呼び出し
             EditorApplicationUtility.windowsReordered += () => {
                 this.isWindowChecked = false;   // ウィンドウが不確かであるとする
-                Debug.Log("Editor windows reordered");
+                //Debug.Log("Editor windows reordered");
             };
 #endif
         }

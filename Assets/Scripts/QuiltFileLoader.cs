@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
@@ -61,14 +61,20 @@ public class QuiltFileLoader : MonoBehaviour
         // 操作できるのはファイル読み込み待ちでないときだけ
         if (!isLoading)
         {
-            // [O] キーまたは右クリックでファイル選択ダイアログを開く
-            if (Input.GetKey(KeyCode.O) || Input.GetMouseButton(1))
+            if (Input.GetKeyUp(KeyCode.Escape))
             {
+                Debug.Log("ESC key pressed");
+                Quit();
+            }
+            // [O] キーまたは右クリックでファイル選択ダイアログを開く
+            if (Input.GetKeyDown(KeyCode.O) || Input.GetMouseButtonUp(1))
+            {
+                Debug.Log("Open key pressed");
                 OpenFile();
             }
 
             // [S] キーで現在の画面を保存
-            if (Input.GetKey(KeyCode.S))
+            if (Input.GetKeyDown(KeyCode.S))
             {
                 SaveFile();
             }
@@ -111,6 +117,14 @@ public class QuiltFileLoader : MonoBehaviour
                 messageClearTime = 0;
             }
         }
+    }
+    
+    private void Quit() {
+#if UNITY_EDITOR
+        UnityEditor.EditorApplication.isPlaying = false;
+#else
+        Application.Quit();
+#endif
     }
 
     /// <summary>
@@ -266,18 +280,35 @@ public class QuiltFileLoader : MonoBehaviour
     /// </summary>
     private void OpenFile()
     {
+        // OSX対応のためここでもフラグを立ててみる
+        isLoading = true;
         // Standalone File Browserを利用
         var extensions = new[] {
                 new ExtensionFilter("Image Files", "png", "jpg", "jpeg" ),
                 new ExtensionFilter("All Files", "*" ),
             };
-        string[] files = StandaloneFileBrowser.OpenFilePanel("Open File", "", extensions, false);
-        if (files.Length < 1) return;
+        //string[] files = StandaloneFileBrowser.OpenFilePanel("Open File", "", extensions, false);
+        Debug.Log("Dialog opened. isLoading " + isLoading);
+        StandaloneFileBrowser.OpenFilePanelAsync("Open image", "", extensions, false, OpenFileCallback);
+        Debug.Log("Dialog opened");
+    }
+
+    private void OpenFileCallback(string[] files)
+    {
+        if (files.Length < 1)
+        {
+            isLoading = false;
+            return;
+        }
 
         string path = files[0];
         if (!string.IsNullOrEmpty(path))
         {
             LoadFile(path);
+        }
+        else
+        {
+            isLoading = false;
         }
     }
 
