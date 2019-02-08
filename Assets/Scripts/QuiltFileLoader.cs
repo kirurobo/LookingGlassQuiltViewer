@@ -63,13 +63,11 @@ public class QuiltFileLoader : MonoBehaviour
         {
             if (Input.GetKeyUp(KeyCode.Escape))
             {
-                Debug.Log("ESC key pressed");
                 Quit();
             }
             // [O] キーまたは右クリックでファイル選択ダイアログを開く
             if (Input.GetKeyDown(KeyCode.O) || Input.GetMouseButtonUp(1))
             {
-                Debug.Log("Open key pressed");
                 OpenFile();
             }
 
@@ -214,6 +212,35 @@ public class QuiltFileLoader : MonoBehaviour
     }
 
     /// <summary>
+    /// 指定ディレクトリ内の画像をターゲットのリストに追加
+    /// </summary>
+    /// <param name="directory"></param>
+    /// <param name="list"></param>
+    private void AddTargetDirectory(string directory, ref List<string> list)
+    {
+        string[] allFiles = Directory.GetFiles(directory);
+        foreach (string path in allFiles)
+        {
+            if (CheckQuiltFile(path))
+            {
+                list.Add(path);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 指定ファイルが対象となる画像かどうかを判別
+    /// 現状、JPEGかPNGなら通す
+    /// </summary>
+    /// <param name="path">ファイルのパス</param>
+    /// <returns>対象の形式ならtrue</returns>
+    private bool CheckQuiltFile(string path)
+    {
+        string ext = Path.GetExtension(path).ToLower();
+        return (ext == ".png" || ext == ".jpg" || ext == ".jpeg") ;
+    }
+
+    /// <summary>
     /// スライドショーでの次のファイルパスを返す
     /// </summary>
     /// <returns>path</returns>
@@ -230,24 +257,11 @@ public class QuiltFileLoader : MonoBehaviour
             // 対象ファイル指定なしならば、現在のファイルと同じディレクトリから一覧を取得
             //   利便性のため、毎回一覧を取得
             string directory = Path.GetDirectoryName(currentFile);
-            string filename = Path.GetFileName(currentFile);
             files = new List<string>();
-
-            string[] allFiles = Directory.GetFiles(directory);
-            foreach (string path in allFiles) {
-                string ext = Path.GetExtension(path).ToLower();
-                if (ext == ".png" || ext == ".jpg" || ext == ".jpeg") {
-                    files.Add(path);
-                    if (Path.GetFileName(path) == filename) {
-                        currentFile = path;
-                    }
-                    Debug.Log(path);
-                }
-            }
-
-            files.Sort();
+            AddTargetDirectory(directory, ref files);   // ディレクトリ内の画像一覧を取得
+            files.Sort();   // パスの順に並び替え
             currentIndex = files.IndexOf(currentFile);
-            Debug.Log("Index: " + currentIndex);
+            //Debug.Log("Index: " + currentIndex);
         }
 
         Debug.Log("Current index: " + currentIndex + "  Step: " + step);
@@ -288,11 +302,13 @@ public class QuiltFileLoader : MonoBehaviour
                 new ExtensionFilter("All Files", "*" ),
             };
         //string[] files = StandaloneFileBrowser.OpenFilePanel("Open File", "", extensions, false);
-        Debug.Log("Dialog opened. isLoading " + isLoading);
         StandaloneFileBrowser.OpenFilePanelAsync("Open image", "", extensions, false, OpenFileCallback);
-        Debug.Log("Dialog opened");
     }
 
+    /// <summary>
+    /// 非同期ファイルダイアログの完了時コールバック
+    /// </summary>
+    /// <param name="files"></param>
     private void OpenFileCallback(string[] files)
     {
         if (files.Length < 1)
@@ -321,22 +337,37 @@ public class QuiltFileLoader : MonoBehaviour
         // 自分のウィンドウにフォーカスを与える
         window.Focus();
 
-        if (files.Length == 1) {
-            // 一つだけドロップの場合はスライドショーリストを消去
-            targetFiles.Clear();
+        // 表示対象リストを消去
+        targetFiles.Clear();
 
-            // ファイルだけ読み込み
-            LoadFile(files[0]);
-        }
-        else if (files.Length > 1)
+        foreach (string path in files)
         {
-            // 複数のファイルがあれば、それらをスライドショー対象とする
-            targetFiles.Clear();
-            targetFiles.AddRange(files);
-            targetFiles.Sort();
+            if (File.Exists(path))
+            {
+                // 画像ならば表示対象に追加
+                if (CheckQuiltFile(path))
+                {
+                    targetFiles.Add(path);
+                }
+            }
+            else if (Directory.Exists(path))
+            {
+                // フォルダならばその中の画像を表示対象に追加
+                AddTargetDirectory(path, ref targetFiles);
+            }
+        }
+        targetFiles.Sort();
 
-            // 最初のファイルだけ読み込み
-            LoadFile(targetFiles[0]);
+        if (targetFiles.Count < 1) return;
+
+        // 1ファイルだけ読み込み
+        LoadFile(targetFiles[0]);
+
+        // 指定ファイルが1つしかなければ、表示対象リストなしとして同一フォルダ内探索を行う。
+        // そうでなければ表示対象のみのスライドショーとする
+        if (targetFiles.Count == 1)
+        {
+            targetFiles.Clear();
         }
     }
 
