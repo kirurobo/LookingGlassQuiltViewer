@@ -294,8 +294,9 @@ public class QuiltFileLoader : MonoBehaviour
     /// </summary>
     private void OpenFile()
     {
-        // OSX対応のためここでもフラグを立ててみる
+        // ロード中は不用意に操作されないようフラグを立てておく
         isLoading = true;
+
         // Standalone File Browserを利用
         var extensions = new[] {
                 new ExtensionFilter("Image Files", "png", "jpg", "jpeg" ),
@@ -372,7 +373,8 @@ public class QuiltFileLoader : MonoBehaviour
     }
 
     /// <summary>
-    /// 自己相関からタイル数を推定
+    /// タイル数を推定
+    /// 今のところ、プリセットにあるパターン（4x8,5x9,6x10,4x6）のどれかに限定
     /// </summary>
     /// <param name="texture"></param>
     /// <returns></returns>
@@ -407,12 +409,14 @@ public class QuiltFileLoader : MonoBehaviour
         // テクスチャを配列に取得
         Color[] pixels = texture.GetPixels(0, 0, texture.width, texture.height);
 
-        // Tiling候補ごとの自己相関を求める
+        // この変数にTiling候補ごとの評価値（小さい方が良い）が入る
         float[] score = new float[tilingPresets.Count];
 
         // 相関をとる周期の調整値。1だと全ピクセルについて相関をとるが遅い。
-        int skip = texture.width / 512;     // 4;
+        int skip = texture.width / 512;     // 固定値 4 としてもでも動いたが、それだと4096pxのとき遅い
+        if (skip < 1) skip = 1;             // 最低1はないと無限ループとなってしまう
 
+        // Tiling候補ごとに類似度を求める
         int index = 0;
         foreach (var preset in tilingPresets)
         {
@@ -421,17 +425,25 @@ public class QuiltFileLoader : MonoBehaviour
             {
                 for (int u = 0; u < preset.tileSizeX; u += skip)
                 {
-                    Color sum = Color.clear;
-                    for (int y = 0; y < preset.tilesY; y++)
-                    {
-                        for (int x = 0; x < preset.tilesX; x++)
-                        {
-                            Color color = pixels[(y * preset.tileSizeY + v) * texture.width + (x * preset.tileSizeX + u)];
-                            sum += color;
-                        }
-                    }
-                    Color average = sum / preset.numViews;
+                    //// まず、平均値を求める
+                    //Color sum = Color.clear;
+                    //for (int y = 0; y < preset.tilesY; y++)
+                    //{
+                    //    for (int x = 0; x < preset.tilesX; x++)
+                    //    {
+                    //        Color color = pixels[(y * preset.tileSizeY + v) * texture.width + (x * preset.tileSizeX + u)];
+                    //        sum += color;
+                    //    }
+                    //}
+                    //Color average = sum / preset.numViews;
 
+                    // 中央タイルの画素を平均値の代わりに利用する
+                    //   （各タイル間ではわずかな違いしかないという前提）
+                    int centerTileY = preset.tilesY / 2;
+                    int centerTileX = preset.tilesX / 2;
+                    Color average = pixels[(centerTileY * preset.tileSizeY + v) * texture.width + (centerTileX * preset.tileSizeX + u)];
+
+                    // 求めた平均を使い、分散を出す
                     Color variance = Color.clear;
                     for (int y = 0; y < preset.tilesY; y++)
                     {
@@ -442,13 +454,15 @@ public class QuiltFileLoader : MonoBehaviour
                             variance += diff * diff;
                         }
                     }
-                    score[index] += variance.r + variance.g + variance.b;
+
+                    // 分散の合計(SSD)を求める
+                    score[index] += (variance.r + variance.g + variance.b);
                 }
             }
             index++;
         }
 
-        // 最も相関が高かったプリセットを選択
+        // 最も評価値が良かったTilingを選択
         int selectedIndex = 0;
         float minScore = float.MaxValue;
         for (int i = 0; i < tilingPresets.Count; i++)
