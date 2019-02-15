@@ -6,7 +6,13 @@ A tiled (quilt) image viewer for the Looking Glass
 - Windows or macOS
 
 
-# Credits
+# License
+
+## LookingGlassQuiltViewer
+Copyright (c) 2017 Gökhan Gökçe  
+Released under the MIT License  
+https://github.com/kirurobo/LookingGlassQuiltViewer/blob/master/LICENSE
+
 
 ## HoloPlay SDK
 Copyright 2017-18 Looking Glass Factory Inc. All rights reserved.

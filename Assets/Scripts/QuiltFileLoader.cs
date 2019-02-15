@@ -15,6 +15,8 @@ public class QuiltFileLoader : MonoBehaviour
     Quilt.Tiling defaultTiling;
 
     public Text messageText;
+    public GameObject prevIndicator;
+    public GameObject nextIndicator;
 
     /// <summary>
     /// 読み込み待ちならtrueにする
@@ -22,7 +24,7 @@ public class QuiltFileLoader : MonoBehaviour
     bool isLoading = false;
 
     /// <summary>
-    /// メッセージを表示した場合、それを消去する時刻[s]を入れる
+    /// メッセージを表示した場合、それを消去する時刻[s]をもつ
     /// </summary>
     float messageClearTime = 0;
 
@@ -51,6 +53,10 @@ public class QuiltFileLoader : MonoBehaviour
 
         // フレームレートを下げる
         Application.targetFrameRate = 15;
+
+        // 操作に対する表示は非表示にしておく
+        if (nextIndicator) nextIndicator.SetActive(false);
+        if (prevIndicator) prevIndicator.SetActive(false);
 
         // サンプルの画像を読み込み
         LoadFile(Path.Combine(Application.streamingAssetsPath, "startup.png"));
@@ -87,34 +93,34 @@ public class QuiltFileLoader : MonoBehaviour
             //}
 
             // 前の画像
-            if (Buttons.GetButton(ButtonType.LEFT) || Input.GetKey(KeyCode.LeftArrow))
+            if (Buttons.GetButtonDown(ButtonType.LEFT) || Input.GetKeyDown(KeyCode.LeftArrow))
             {
                 ShowMessage("");    // ファイル名が表示されていれば消す
                 LoadFile(GetNextFile(-1));
             }
 
             // 次の画像
-            if (Buttons.GetButton(ButtonType.RIGHT) || Input.GetKey(KeyCode.RightArrow))
+            if (Buttons.GetButtonDown(ButtonType.RIGHT) || Input.GetKeyDown(KeyCode.RightArrow))
             {
                 ShowMessage("");    // ファイル名が表示されていれば消す
                 LoadFile(GetNextFile(1));
             }
 
-            if (Buttons.GetButton(ButtonType.CIRCLE))
+            if (Buttons.GetButtonDown(ButtonType.CIRCLE))
             {
-                ShowMessage(currentFile);
+                ShowFilename(currentFile);
             }
         }
 
-        // メッセージを一定時間後に消去
-        if (messageClearTime > 0)
-        {
-            if (messageClearTime < Time.time)
-            {
-                messageText.text = "";
-                messageClearTime = 0;
-            }
-        }
+        // 左ボタンが押されていることを表示
+        if (prevIndicator) prevIndicator.SetActive((Buttons.GetButton(ButtonType.LEFT) || Input.GetKey(KeyCode.LeftArrow)));
+
+
+        // 右ボタンが押されていることを表示
+        if (nextIndicator) nextIndicator.SetActive((Buttons.GetButton(ButtonType.RIGHT) || Input.GetKey(KeyCode.RightArrow)));
+
+        UpdateMessage();
+        //UpdateIndicator();
     }
     
     private void Quit() {
@@ -123,6 +129,21 @@ public class QuiltFileLoader : MonoBehaviour
 #else
         Application.Quit();
 #endif
+    }
+
+    /// <summary>
+    /// メッセージを指定時刻に消す
+    /// </summary>
+    private void UpdateMessage()
+    {
+        if (messageClearTime > 0)
+        {
+            if (messageClearTime < Time.time)
+            {
+                messageText.text = "";
+                messageClearTime = 0;
+            }
+        }
     }
 
     /// <summary>
@@ -138,6 +159,17 @@ public class QuiltFileLoader : MonoBehaviour
             messageText.text = text;
             messageClearTime = Time.time + lifetime;
         }
+    }
+
+    private void ShowFilename(string path)
+    {
+        string dir = Path.GetDirectoryName(path);
+        string file = Path.GetFileName(path);
+        ShowMessage(
+            "<size=40><color=white>" + file + "</color></size>"
+            + System.Environment.NewLine
+            + "<size=30><color=lime>" + dir + "</color></size>"
+            );
     }
 
     /// <summary>
@@ -201,6 +233,8 @@ public class QuiltFileLoader : MonoBehaviour
         quilt.tiling = GetTilingType(texture);
         quilt.overrideQuilt = texture;
         quilt.SetupQuilt();
+        quilt.quiltRT.filterMode = FilterMode.Bilinear;
+
 
         // 念のため毎回GCをしてみる…
         System.GC.Collect();
@@ -264,7 +298,6 @@ public class QuiltFileLoader : MonoBehaviour
             //Debug.Log("Index: " + currentIndex);
         }
 
-        Debug.Log("Current index: " + currentIndex + "  Step: " + step);
         int index = currentIndex + step;
         if ((currentIndex >= (files.Count - 1)) && (step > 0))
         {
