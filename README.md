@@ -1,6 +1,9 @@
 # LookingGlassQuiltViewer
 A tiled (quilt) image viewer for the Looking Glass
 
+### Sample quilt image
+<img src="https://github.com/kirurobo/LookingGlassQuiltViewer/blob/master/Assets/StreamingAssets/example01.png" width="256" alt="Sample quilt image">
+
 # System requirements
 - [The Looking Glass](https://lookingglassfactory.com/)
 - Windows or macOS
@@ -9,7 +12,7 @@ A tiled (quilt) image viewer for the Looking Glass
 # License
 
 ## LookingGlassQuiltViewer
-Copyright (c) 2017 Gökhan Gökçe  
+Copyright (c) 2019 Kirurobo
 Released under the MIT License  
 https://github.com/kirurobo/LookingGlassQuiltViewer/blob/master/LICENSE
 
