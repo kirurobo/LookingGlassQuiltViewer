@@ -24,6 +24,11 @@ public class QuiltFileLoader : MonoBehaviour
     bool isLoading = false;
 
     /// <summary>
+    /// カーソルが元々表示されているか
+    /// </summary>
+    bool isCursorVisible = true;
+
+    /// <summary>
     /// メッセージを表示した場合、それを消去する時刻[s]をもつ
     /// </summary>
     float messageClearTime = 0;
@@ -52,7 +57,7 @@ public class QuiltFileLoader : MonoBehaviour
         defaultTiling = quilt.tiling;   // Tilingの初期設定を記憶しておく
 
         // フレームレートを下げる
-        Application.targetFrameRate = 15;
+        Application.targetFrameRate = 30;
 
         // 操作に対する表示は非表示にしておく
         if (nextIndicator) nextIndicator.SetActive(false);
@@ -77,11 +82,20 @@ public class QuiltFileLoader : MonoBehaviour
                 OpenFile();
             }
 
-            // [S] キーで現在の画面を保存
+            // [S] キーを押されたタイミングでカーソルや情報を非表示に
             if (Input.GetKeyDown(KeyCode.S))
             {
-                SaveFile();
+                ShowMessage("");
+                isCursorVisible = Cursor.visible;
+                Cursor.visible = false;
             }
+            // [S] キーが離されたタイミングで現在の画面を保存。カーソルを写さないため非表示化とタイミングをずらす
+            if (Input.GetKeyUp(KeyCode.S))
+            {
+                SaveFile();
+                Cursor.visible = isCursorVisible;
+            }
+
 
             //// [T] キーでウィンドウ透過
             //if (Input.GetKey(KeyCode.T))
