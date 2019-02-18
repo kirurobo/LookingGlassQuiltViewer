@@ -26,6 +26,8 @@ public class QuiltFileLoader : MonoBehaviour
     /// </summary>
     bool isLoading = false;
 
+    long videoFrameCount = 0;
+
     /// <summary>
     /// カーソルが元々表示されているか
     /// </summary>
@@ -63,8 +65,10 @@ public class QuiltFileLoader : MonoBehaviour
         videoPlayer = FindObjectOfType<VideoPlayer>();
         if (videoPlayer)
         {
-            videoRenderTexture = new RenderTexture(2048, 2048, 24);
+            videoRenderTexture = new RenderTexture(4096, 4096, 24);
             videoPlayer.targetTexture = videoRenderTexture;
+
+            videoPlayer.seekCompleted += VideoPlayer_seekCompleted;
         }
 
         // フレームレートを下げる
@@ -106,16 +110,6 @@ public class QuiltFileLoader : MonoBehaviour
                 SaveFile();
                 Cursor.visible = isCursorVisible;
             }
-
-
-            //// [T] キーでウィンドウ透過
-            //if (Input.GetKey(KeyCode.T))
-            //{
-            //    if (window)
-            //    {
-            //        window.isTransparent = !window.isTransparent;
-            //    }
-            //}
 
             // 前の画像
             if (Buttons.GetButtonDown(ButtonType.LEFT) || Input.GetKeyDown(KeyCode.LeftArrow))
@@ -174,11 +168,10 @@ public class QuiltFileLoader : MonoBehaviour
     /// <summary>
     /// 一定時間で消えるメッセージを表示
     /// </summary>
-    /// <param name="text"></param>
-    private void ShowMessage(string text)
+    /// <param name="text">メッセージ文字列</param>
+    /// <param name="lifetime">消えるまでの時間[s]</param>
+    private void ShowMessage(string text, float lifetime = 5f)
     {
-        const float lifetime = 5f;  // 消去までの時間[s]
-
         if (messageText)
         {
             messageText.text = text;
@@ -259,11 +252,11 @@ public class QuiltFileLoader : MonoBehaviour
     /// <returns></returns>
     IEnumerator LoadFileCoroutine(string file)
     {
-        // 前のtextureを破棄
-        Destroy(texture);
-
         string ext = Path.GetExtension(file).ToLower();
         if (ext == ".mp4") {
+            ShowMessage("Loading the movie...   ");
+            quilt.overrideQuilt = null; // videoPlayer.texture;
+
             // 動画を読み込み
             videoPlayer.url = file;
             videoPlayer.Prepare();
@@ -273,26 +266,31 @@ public class QuiltFileLoader : MonoBehaviour
             }
 
             // 前のtextureを破棄
-            Destroy(texture);
+            //Destroy(texture);
 
+            yield return new WaitForSecondsRealtime(0.1f);
             videoPlayer.Play();
-            while (!videoPlayer.isPlaying)
-            {
-                yield return null;
-            }
+
+            ShowMessage("Loading the movie......", 0.5f);
+            yield return new WaitForSecondsRealtime(0.5f);  // フレームが表示されそうな時間、強制的に待つ
             Debug.Log("Play movie");
 
-            texture = new Texture2D(videoRenderTexture.width, videoRenderTexture.height);
-            RenderTexture currentRenderTexture = RenderTexture.active;
-            RenderTexture.active = videoRenderTexture;
-            texture.ReadPixels(new Rect(0, 0, texture.width, texture.height), 0, 0);
-            texture.Apply();
-            RenderTexture.active = currentRenderTexture;
+            // Seek
+            videoPlayer.frame = 0;
 
-            quilt.tiling = GetTilingType(texture);
-            //quilt.tiling = new Quilt.Tiling("Movie", 5, 9, videoRenderTexture.width, videoRenderTexture.height);
-            //quilt.tiling = defaultTiling;
-            quilt.overrideQuilt = videoPlayer.texture;
+            yield return new WaitForEndOfFrame();
+            videoFrameCount = 0;
+
+            //texture = new Texture2D(videoRenderTexture.width, videoRenderTexture.height);
+            //RenderTexture currentRenderTexture = RenderTexture.active;
+            //RenderTexture.active = videoRenderTexture;
+            //texture.ReadPixels(new Rect(0, 0, texture.width, texture.height), 0, 0);
+            //texture.Apply();
+            //RenderTexture.active = currentRenderTexture;
+
+            //quilt.tiling = GetTilingType(texture);
+            ////quilt.tiling = new Quilt.Tiling("Movie", 5, 9, videoRenderTexture.width, videoRenderTexture.height);
+            ////quilt.tiling = defaultTiling;
         }
         else
         {
@@ -306,19 +304,43 @@ public class QuiltFileLoader : MonoBehaviour
             texture = www.texture;
             quilt.tiling = GetTilingType(texture);
             quilt.overrideQuilt = texture;
-        }
 
-        quilt.SetupQuilt();
-        quilt.quiltRT.filterMode = FilterMode.Bilinear;
+            quilt.SetupQuilt();
+            quilt.quiltRT.filterMode = FilterMode.Bilinear;
+
+            Debug.Log("Estimaged tiling: " + quilt.tiling.presetName);     // 選択されたTiling
+        }
 
 
         // 念のため毎回GCをしてみる…
         System.GC.Collect();
 
-        Debug.Log("Estimaged tiling: " + quilt.tiling.presetName);     // 選択されたTiling
-
         // 読み込み完了
         isLoading = false;
+    }
+
+    private void VideoPlayer_seekCompleted(VideoPlayer source)
+    {
+        if (quilt)
+        {
+            // 前のtextureを破棄
+            Destroy(texture);
+
+            texture = new Texture2D(videoRenderTexture.width, videoRenderTexture.height);
+            RenderTexture currentRenderTexture = RenderTexture.active;
+            RenderTexture.active = videoRenderTexture;
+            texture.ReadPixels(new Rect(0, 0, texture.width, texture.height), 0, 0);
+            texture.Apply();
+            RenderTexture.active = currentRenderTexture;
+
+            quilt.tiling = GetTilingType(texture);
+            quilt.SetupQuilt();
+
+            quilt.overrideQuilt = videoPlayer.texture;
+            quilt.quiltRT.filterMode = FilterMode.Bilinear;
+
+            Debug.Log("Estimaged tiling: " + quilt.tiling.presetName);     // 選択されたTiling
+        }
     }
 
     /// <summary>
@@ -347,7 +369,10 @@ public class QuiltFileLoader : MonoBehaviour
     private bool CheckQuiltFile(string path)
     {
         string ext = Path.GetExtension(path).ToLower();
-        return (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".mp4") ;
+        return (
+            ext == ".png" || ext == ".jpg" || ext == ".jpeg"
+            || ext == ".mp4" || ext == ".webm" || ext == ".mov" || ext == ".avi"
+            ) ;
     }
 
     /// <summary>
@@ -409,6 +434,7 @@ public class QuiltFileLoader : MonoBehaviour
         // Standalone File Browserを利用
         var extensions = new[] {
                 new ExtensionFilter("Image Files", "png", "jpg", "jpeg" ),
+                new ExtensionFilter("Movie Files", "mp4", "webm", "mov", "avi" ),
                 new ExtensionFilter("All Files", "*" ),
             };
         //string[] files = StandaloneFileBrowser.OpenFilePanel("Open File", "", extensions, false);
