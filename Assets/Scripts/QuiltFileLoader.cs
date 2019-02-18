@@ -6,11 +6,14 @@ using UnityEngine.UI;
 using Kirurobo;
 using HoloPlay;
 using SFB;
+using UnityEngine.Video;
 
 public class QuiltFileLoader : MonoBehaviour
 {
     WindowController window;
     Texture2D texture;
+    VideoPlayer videoPlayer;
+    RenderTexture videoRenderTexture;
     Quilt quilt;
     Quilt.Tiling defaultTiling;
 
@@ -55,6 +58,14 @@ public class QuiltFileLoader : MonoBehaviour
         // Quiltのインスタンスを取得
         quilt = FindObjectOfType<Quilt>();
         defaultTiling = quilt.tiling;   // Tilingの初期設定を記憶しておく
+
+        // VideoPlayerのインスタンスを取得
+        videoPlayer = FindObjectOfType<VideoPlayer>();
+        if (videoPlayer)
+        {
+            videoRenderTexture = new RenderTexture(2048, 2048, 24);
+            videoPlayer.targetTexture = videoRenderTexture;
+        }
 
         // フレームレートを下げる
         Application.targetFrameRate = 30;
@@ -191,6 +202,17 @@ public class QuiltFileLoader : MonoBehaviour
     /// </summary>
     private void SaveFile()
     {
+        StartCoroutine(SaveFileCoroutine());
+    }
+
+    /// <summary>
+    /// フレーム描画後に画像を保存
+    /// </summary>
+    /// <returns></returns>
+    private IEnumerator SaveFileCoroutine()
+    {
+        yield return new WaitForEndOfFrame();
+
         // 現在のRenderTextureの内容からTexture2Dを作成
         RenderTexture renderTexture = RenderTexture.active;
         int w = Screen.width;
@@ -214,6 +236,7 @@ public class QuiltFileLoader : MonoBehaviour
         ShowMessage("Saved " + file);
     }
 
+
     /// <summary>
     /// 画像を読み込み
     /// </summary>
@@ -236,16 +259,55 @@ public class QuiltFileLoader : MonoBehaviour
     /// <returns></returns>
     IEnumerator LoadFileCoroutine(string file)
     {
-        WWW www = new WWW(file);
-        yield return www;
-
         // 前のtextureを破棄
         Destroy(texture);
 
-        // Quiltを読み込み
-        texture = www.texture;
-        quilt.tiling = GetTilingType(texture);
-        quilt.overrideQuilt = texture;
+        string ext = Path.GetExtension(file).ToLower();
+        if (ext == ".mp4") {
+            // 動画を読み込み
+            videoPlayer.url = file;
+            videoPlayer.Prepare();
+            while (!videoPlayer.isPrepared)
+            {
+                yield return null;
+            }
+
+            // 前のtextureを破棄
+            Destroy(texture);
+
+            videoPlayer.Play();
+            while (!videoPlayer.isPlaying)
+            {
+                yield return null;
+            }
+            Debug.Log("Play movie");
+
+            texture = new Texture2D(videoRenderTexture.width, videoRenderTexture.height);
+            RenderTexture currentRenderTexture = RenderTexture.active;
+            RenderTexture.active = videoRenderTexture;
+            texture.ReadPixels(new Rect(0, 0, texture.width, texture.height), 0, 0);
+            texture.Apply();
+            RenderTexture.active = currentRenderTexture;
+
+            quilt.tiling = GetTilingType(texture);
+            //quilt.tiling = new Quilt.Tiling("Movie", 5, 9, videoRenderTexture.width, videoRenderTexture.height);
+            //quilt.tiling = defaultTiling;
+            quilt.overrideQuilt = videoPlayer.texture;
+        }
+        else
+        {
+            WWW www = new WWW(file);
+            yield return www;
+
+            // 前のtextureを破棄
+            Destroy(texture);
+
+            // Quiltを読み込み
+            texture = www.texture;
+            quilt.tiling = GetTilingType(texture);
+            quilt.overrideQuilt = texture;
+        }
+
         quilt.SetupQuilt();
         quilt.quiltRT.filterMode = FilterMode.Bilinear;
 
@@ -285,7 +347,7 @@ public class QuiltFileLoader : MonoBehaviour
     private bool CheckQuiltFile(string path)
     {
         string ext = Path.GetExtension(path).ToLower();
-        return (ext == ".png" || ext == ".jpg" || ext == ".jpeg") ;
+        return (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".mp4") ;
     }
 
     /// <summary>
