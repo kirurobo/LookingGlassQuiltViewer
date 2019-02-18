@@ -18,6 +18,9 @@ https://github.com/kirurobo/LookingGlassQuiltViewer/blob/master/LICENSE
 
 
 ## HoloPlay SDK
+LICENSE 
+[(TEXT)](https://github.com/kirurobo/LookingGlassQuiltViewer/blob/master/Assets/HoloPlay/LICENSE.txt) 
+[(PDF)](https://github.com/kirurobo/LookingGlassQuiltViewer/blob/master/Assets/HoloPlay/License.pdf)  
 Copyright 2017-18 Looking Glass Factory Inc. All rights reserved.
 
 ## UnityStandaloneFileBrowser
