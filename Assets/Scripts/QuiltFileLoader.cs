@@ -21,6 +21,10 @@ public class QuiltFileLoader : MonoBehaviour
     public GameObject prevIndicator;
     public GameObject nextIndicator;
 
+    static readonly string[] imageExtensions = { "png", "jpg", "jpeg" };
+    static readonly string[] movieExtensions = { "mp4", "webm", "mov", "avi" };
+
+
     /// <summary>
     /// 読み込み待ちならtrueにする
     /// </summary>
@@ -240,82 +244,90 @@ public class QuiltFileLoader : MonoBehaviour
         isLoading = true;
         currentFile = path;
 
-        string uri = new System.Uri(path).AbsoluteUri;
-        Debug.Log("Loading: " + uri);
-        StartCoroutine("LoadFileCoroutine", uri);
-    }
-
-    /// <summary>
-    /// コルーチンでファイル読み込み
-    /// </summary>
-    /// <param name="file"></param>
-    /// <returns></returns>
-    IEnumerator LoadFileCoroutine(string file)
-    {
-        string ext = Path.GetExtension(file).ToLower();
-        if (ext == ".mp4") {
-            ShowMessage("Loading the movie...   ");
-            quilt.overrideQuilt = null; // videoPlayer.texture;
-
-            // 動画を読み込み
-            videoPlayer.url = file;
-            videoPlayer.Prepare();
-            while (!videoPlayer.isPrepared)
-            {
-                yield return null;
-            }
-
-            // 前のtextureを破棄
-            //Destroy(texture);
-
-            yield return new WaitForSecondsRealtime(0.1f);
-            videoPlayer.Play();
-
-            ShowMessage("Loading the movie......", 0.5f);
-            yield return new WaitForSecondsRealtime(0.5f);  // フレームが表示されそうな時間、強制的に待つ
-            Debug.Log("Play movie");
-
-            // Seek
-            videoPlayer.frame = 0;
-
-            yield return new WaitForEndOfFrame();
-            videoFrameCount = 0;
-
-            //texture = new Texture2D(videoRenderTexture.width, videoRenderTexture.height);
-            //RenderTexture currentRenderTexture = RenderTexture.active;
-            //RenderTexture.active = videoRenderTexture;
-            //texture.ReadPixels(new Rect(0, 0, texture.width, texture.height), 0, 0);
-            //texture.Apply();
-            //RenderTexture.active = currentRenderTexture;
-
-            //quilt.tiling = GetTilingType(texture);
-            ////quilt.tiling = new Quilt.Tiling("Movie", 5, 9, videoRenderTexture.width, videoRenderTexture.height);
-            ////quilt.tiling = defaultTiling;
+        if (CheckMovieFile(path))
+        {
+            StartCoroutine("LoadMovieFileCoroutine", path);
         }
         else
         {
-            WWW www = new WWW(file);
-            yield return www;
+            string uri = new System.Uri(path).AbsoluteUri;
+            Debug.Log("Loading: " + uri);
 
-            // 前のtextureを破棄
-            Destroy(texture);
+            StartCoroutine("LoadImageFileCoroutine", uri);
+        }
+    }
 
-            // Quiltを読み込み
-            texture = www.texture;
-            quilt.tiling = GetTilingType(texture);
-            quilt.overrideQuilt = texture;
+    /// <summary>
+    /// コルーチンで画像ファイル読み込み
+    /// </summary>
+    /// <param name="uri"></param>
+    /// <returns></returns>
+    IEnumerator LoadImageFileCoroutine(string uri)
+    {
+        // 読み込み
+        WWW www = new WWW(uri);
+        yield return www;
 
-            quilt.SetupQuilt();
-            quilt.quiltRT.filterMode = FilterMode.Bilinear;
+        // 前のtextureを破棄
+        Destroy(texture);
 
-            Debug.Log("Estimaged tiling: " + quilt.tiling.presetName);     // 選択されたTiling
+        // Quiltを読み込み
+        texture = www.texture;
+        quilt.tiling = GetTilingType(texture);
+        quilt.overrideQuilt = texture;
+
+        quilt.SetupQuilt();
+        quilt.quiltRT.filterMode = FilterMode.Bilinear;
+
+        Debug.Log("Estimaged tiling: " + quilt.tiling.presetName);     // 選択されたTiling
+
+    
+        // 念のため毎回GCをしてみる…
+        System.GC.Collect();
+
+        // フラグを読み込み完了とする
+        isLoading = false;
+    }
+
+
+    /// <summary>
+    /// コルーチンで動画ファイル読み込み
+    /// </summary>
+    /// <param name="uri"></param>
+    /// <returns></returns>
+    IEnumerator LoadMovieFileCoroutine(string uri)
+    {
+        ShowMessage("Loading the movie...   ");
+        quilt.overrideQuilt = null;     // 読み込み開始を伝えるため、前の画像は消してしまう
+
+        // 動画を読み込み
+        videoPlayer.url = uri;
+        videoPlayer.Prepare();
+        while (!videoPlayer.isPrepared)
+        {
+            yield return null;
         }
 
+        // 前のtextureを破棄
+        //Destroy(texture);
+
+        yield return new WaitForSecondsRealtime(0.1f);
+        videoPlayer.Play();
+
+        ShowMessage("Loading the movie......", 0.5f);
+        yield return new WaitForSecondsRealtime(0.5f);  // フレームが表示されそうな時間、強制的に待つ
+        Debug.Log("Play movie");
+
+        // Seek
+        videoPlayer.frame = 0;
+
+        yield return new WaitForEndOfFrame();
+        videoFrameCount = 0;
 
         // 念のため毎回GCをしてみる…
         System.GC.Collect();
 
-        // 読み込み完了
+        // フラグを読み込み完了とする
         isLoading = false;
     }
 
@@ -353,7 +365,7 @@ public class QuiltFileLoader : MonoBehaviour
         string[] allFiles = Directory.GetFiles(directory);
         foreach (string path in allFiles)
         {
-            if (CheckQuiltFile(path))
+            if (CheckImageFile(path) || CheckMovieFile(path))
             {
                 list.Add(path);
             }
@@ -366,13 +378,34 @@ public class QuiltFileLoader : MonoBehaviour
     /// </summary>
     /// <param name="path">ファイルのパス</param>
     /// <returns>対象の形式ならtrue</returns>
-    private bool CheckQuiltFile(string path)
+    private bool CheckImageFile(string path)
     {
-        string ext = Path.GetExtension(path).ToLower();
-        return (
-            ext == ".png" || ext == ".jpg" || ext == ".jpeg"
-            || ext == ".mp4" || ext == ".webm" || ext == ".mov" || ext == ".avi"
-            ) ;
+        // 先頭のピリオドは除去して小文字にした拡張子
+        string ext = Path.GetExtension(path).Substring(1).ToLower();
+
+        foreach (string extension in imageExtensions)
+        {
+            if (extension == ext) return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// 指定ファイルが対象となる画像かどうかを判別
+    /// 現状、JPEGかPNGなら通す
+    /// </summary>
+    /// <param name="path">ファイルのパス</param>
+    /// <returns>対象の形式ならtrue</returns>
+    private bool CheckMovieFile(string path)
+    {
+        // 先頭のピリオドは除去して小文字にした拡張子
+        string ext = Path.GetExtension(path).Substring(1).ToLower();
+
+        foreach (string extension in movieExtensions)
+        {
+            if (extension == ext) return true;
+        }
+        return false;
     }
 
     /// <summary>
@@ -433,8 +466,8 @@ public class QuiltFileLoader : MonoBehaviour
 
         // Standalone File Browserを利用
         var extensions = new[] {
-                new ExtensionFilter("Image Files", "png", "jpg", "jpeg" ),
-                new ExtensionFilter("Movie Files", "mp4", "webm", "mov", "avi" ),
+                new ExtensionFilter("Image Files",  imageExtensions),
+                new ExtensionFilter("Movie Files", movieExtensions ),
                 new ExtensionFilter("All Files", "*" ),
             };
         //string[] files = StandaloneFileBrowser.OpenFilePanel("Open File", "", extensions, false);
@@ -481,7 +514,7 @@ public class QuiltFileLoader : MonoBehaviour
             if (File.Exists(path))
             {
                 // 画像ならば表示対象に追加
-                if (CheckQuiltFile(path))
+                if (CheckImageFile(path) || CheckMovieFile(path))
                 {
                     targetFiles.Add(path);
                 }
