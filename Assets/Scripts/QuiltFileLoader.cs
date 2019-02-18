@@ -84,6 +84,10 @@ public class QuiltFileLoader : MonoBehaviour
 
         // サンプルの画像を読み込み
         LoadFile(Path.Combine(Application.streamingAssetsPath, "startup.png"));
+
+        // カーソルを表示するか否かを記憶
+        isCursorVisible = Cursor.visible;
+
     }
 
     void Update()
@@ -105,14 +109,12 @@ public class QuiltFileLoader : MonoBehaviour
             if (Input.GetKeyDown(KeyCode.S))
             {
                 ShowMessage("");
-                isCursorVisible = Cursor.visible;
                 Cursor.visible = false;
             }
             // [S] キーが離されたタイミングで現在の画面を保存。カーソルを写さないため非表示化とタイミングをずらす
             if (Input.GetKeyUp(KeyCode.S))
             {
                 SaveFile();
-                Cursor.visible = isCursorVisible;
             }
 
             // 前の画像
@@ -231,6 +233,9 @@ public class QuiltFileLoader : MonoBehaviour
 
         // 保存したというメッセージを表示
         ShowMessage("Saved " + file);
+
+        // カーソル表示を元に戻す
+        Cursor.visible = isCursorVisible;
     }
 
 
