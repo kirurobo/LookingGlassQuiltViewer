@@ -192,12 +192,14 @@ namespace Kirurobo
                 originalCameraBackground = currentCamera.backgroundColor;
 
             }
-            // 描画色抽出用テクスチャ
+
+            // マウス下描画色抽出用テクスチャを準備
             colorPickerTexture = new Texture2D(1, 1, TextureFormat.ARGB32, false);
 
 #if (UNITY_WIN || UNITY_STANDALONE_WIN)
             // ウィンドウ制御用のインスタンス作成
             uniWin = new UniWinApi();
+
             // 自分のウィンドウを取得
             FindMyWindow();
 #endif
@@ -212,7 +214,7 @@ namespace Kirurobo
 
         void Start()
         {
-            // マウスカーソル下の色を取得させるコルーチンを開始
+            // マウスカーソル直下の色を取得するコルーチンを開始
             StartCoroutine(PickColorCoroutine());
         }
 
