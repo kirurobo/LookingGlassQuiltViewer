@@ -255,6 +255,12 @@ public class QuiltFileLoader : MonoBehaviour
         }
         else
         {
+            // もし動画が再生されていれば停止しておく
+            if (videoPlayer && videoPlayer.isPlaying)
+            {
+                videoPlayer.Stop();
+            }
+
             string uri = new System.Uri(path).AbsoluteUri;
             Debug.Log("Loading: " + uri);
 
