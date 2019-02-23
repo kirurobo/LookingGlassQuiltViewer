@@ -1,3 +1,6 @@
 [submodule "Assets/UniWinApi"]
 	path = Assets/UniWinApi
 	url = https://github.com/kirurobo/UniWinApiAsset.git
+[submodule "Assets/UniWinApi/Scripts/Wrappers"]
+	path = Assets/UniWinApi/Scripts/Wrappers
+	url = https://github.com/kirurobo/CSharpWinApi.git

@@ -390,6 +390,7 @@ namespace Kirurobo
             public static readonly int OFN_READONLY = 0x00000001;
             public static readonly int OFN_SHAREAWARE = 0x00004000;
             public static readonly int OFN_SHOWHELP = 0x00000010;
+
             public OpenFileName()
             {
                 this.structSize = Marshal.SizeOf(this);
