@@ -14,12 +14,14 @@ public class QuiltFileLoader : MonoBehaviour
     Texture2D texture;
     VideoPlayer videoPlayer;
     RenderTexture videoRenderTexture;
-    Holoplay quilt;
+    Holoplay holoplay;
     Quilt.Settings defaultTiling;
 
-    public Text messageText;
-    public GameObject prevIndicator;
-    public GameObject nextIndicator;
+    public TMPro.TextMeshPro messageText;        // ファイル名等表示用のText
+    public GameObject prevIndicator;    // 前のファイルへ移動時に表示するオブジェクト
+    public GameObject nextIndicator;    // 次のファイルへ移動時に表示するオブジェクト
+
+    public int FrameRate = 30;          // フレームレート指定 [fps]
 
     static readonly string[] imageExtensions = { "png", "jpg", "jpeg" };
     static readonly string[] movieExtensions = { "mp4", "webm", "mov", "avi" };
@@ -60,8 +62,9 @@ public class QuiltFileLoader : MonoBehaviour
         window.OnFilesDropped += Window_OnFilesDropped;
 
         // Quiltのインスタンスを取得
-        quilt = FindObjectOfType<Holoplay>();
-        defaultTiling = Quilt.GetPreset(quilt.quiltPreset);   // Tilingの初期設定を記憶しておく
+        holoplay = FindObjectOfType<Holoplay>();
+        defaultTiling = Quilt.GetPreset(holoplay.quiltPreset);   // Tilingの初期設定を記憶しておく
+        holoplay.background = new Color(0, 0, 0, 0);             // 背景は透明にする
 
         // VideoPlayerのインスタンスを取得
         videoPlayer = FindObjectOfType<VideoPlayer>();
@@ -73,8 +76,8 @@ public class QuiltFileLoader : MonoBehaviour
             videoPlayer.seekCompleted += VideoPlayer_seekCompleted;
         }
 
-        // フレームレートを下げる
-        Application.targetFrameRate = 30;
+        // フレームレートを指定
+        Application.targetFrameRate = FrameRate;
 
         // 操作に対する表示は非表示にしておく
         if (nextIndicator) nextIndicator.SetActive(false);
@@ -82,6 +85,9 @@ public class QuiltFileLoader : MonoBehaviour
 
         // サンプルの画像を読み込み
         LoadFile(Path.Combine(Application.streamingAssetsPath, "startup.png"));
+
+        // メッセージ欄を最初に消去
+        ShowMessage("");
 
         // カーソルを表示するか否かを記憶
         isCursorVisible = Cursor.visible;
@@ -138,7 +144,6 @@ public class QuiltFileLoader : MonoBehaviour
         // 左ボタンが押されていることを表示
         if (prevIndicator) prevIndicator.SetActive((ButtonManager.GetButton(ButtonType.LEFT) || Input.GetKey(KeyCode.LeftArrow)));
 
-
         // 右ボタンが押されていることを表示
         if (nextIndicator) nextIndicator.SetActive((ButtonManager.GetButton(ButtonType.RIGHT) || Input.GetKey(KeyCode.RightArrow)));
 
@@ -146,10 +151,15 @@ public class QuiltFileLoader : MonoBehaviour
         //UpdateIndicator();
     }
     
+    /// <summary>
+    /// 終了処理
+    /// </summary>
     private void Quit() {
 #if UNITY_EDITOR
+        // エディタ上なら、再生を終了
         UnityEditor.EditorApplication.isPlaying = false;
 #else
+        // スタンドアローンなら、アプリケーションを終了
         Application.Quit();
 #endif
     }
@@ -188,9 +198,9 @@ public class QuiltFileLoader : MonoBehaviour
         string dir = Path.GetDirectoryName(path);
         string file = Path.GetFileName(path);
         ShowMessage(
-            "<size=40><color=white>" + file + "</color></size>"
+            "<size=10><color=#FFFFFF>" + file + "</color></size>"
             + System.Environment.NewLine
-            + "<size=30><color=lime>" + dir + "</color></size>"
+            + "<size=6><color=#00FF00>" + dir + "</color></size>"
             );
     }
 
@@ -248,11 +258,12 @@ public class QuiltFileLoader : MonoBehaviour
         currentFile = path;
 
         if (CheckMovieFile(path))
-        {
+        {    // 動画を開く場合
             StartCoroutine("LoadMovieFileCoroutine", path);
         }
         else
-        {
+        {   // 静止画を開く場合
+
             // もし動画が再生されていれば停止しておく
             if (videoPlayer && videoPlayer.isPlaying)
             {
@@ -260,7 +271,7 @@ public class QuiltFileLoader : MonoBehaviour
             }
 
             string uri = new System.Uri(path).AbsoluteUri;
-            Debug.Log("Loading: " + uri);
+            //Debug.Log("Loading: " + uri);
 
             StartCoroutine("LoadImageFileCoroutine", uri);
         }
@@ -282,13 +293,14 @@ public class QuiltFileLoader : MonoBehaviour
 
         // Quiltを読み込み
         texture = www.texture;
-        quilt.customQuiltSettings = GetTilingType(texture);
-        quilt.overrideQuilt = texture;
+        holoplay.customQuiltSettings = GetTilingType(texture);
+        holoplay.quiltPreset = Quilt.Preset.Custom;
+        holoplay.overrideQuilt = texture;
 
-        quilt.SetupQuilt();
-        quilt.quiltRT.filterMode = FilterMode.Bilinear;
+        holoplay.SetupQuilt();
+        holoplay.quiltRT.filterMode = FilterMode.Bilinear;
 
-        Debug.Log("Estimaged tiling: " + quilt.quiltSettings.numViews);     // 選択されたTiling
+        //Debug.Log("Estimaged tiling: " + holoplay.quiltSettings.numViews);     // 選択されたTiling
 
     
         // 念のため毎回GCをしてみる…
@@ -307,7 +319,7 @@ public class QuiltFileLoader : MonoBehaviour
     IEnumerator LoadMovieFileCoroutine(string uri)
     {
         ShowMessage("Loading the movie...   ");
-        quilt.overrideQuilt = null;     // 読み込み開始を伝えるため、前の画像は消してしまう
+        holoplay.overrideQuilt = null;     // 読み込み開始を伝えるため、前の画像は消してしまう
 
         // 動画を読み込み
         videoPlayer.url = uri;
@@ -341,7 +353,7 @@ public class QuiltFileLoader : MonoBehaviour
 
     private void VideoPlayer_seekCompleted(VideoPlayer source)
     {
-        if (quilt)
+        if (holoplay)
         {
             // 前のtextureを破棄
             Destroy(texture);
@@ -353,14 +365,14 @@ public class QuiltFileLoader : MonoBehaviour
             texture.Apply();
             RenderTexture.active = currentRenderTexture;
 
-            quilt.customQuiltSettings = GetTilingType(texture);
-            quilt.quiltPreset = Quilt.Preset.Custom;
-            quilt.SetupQuilt();
+            holoplay.customQuiltSettings = GetTilingType(texture);
+            holoplay.quiltPreset = Quilt.Preset.Custom;
+            holoplay.SetupQuilt();
 
-            quilt.overrideQuilt = texture;
-            quilt.quiltRT.filterMode = FilterMode.Bilinear;
+            holoplay.overrideQuilt = texture;
+            holoplay.quiltRT.filterMode = FilterMode.Bilinear;
 
-            Debug.Log("Estimaged tiling: " + quilt.customQuiltSettings.numViews);     // 選択されたTiling
+            //Debug.Log("Estimaged tiling: " + holoplay.customQuiltSettings.numViews);     // 選択されたTiling
         }
     }
 
@@ -551,7 +563,7 @@ public class QuiltFileLoader : MonoBehaviour
 
     /// <summary>
     /// タイル数を推定
-    /// 今のところ、プリセットにあるパターン（4x8,5x9,6x10,4x6）のどれかに限定
+    /// プリセットにあるパターン（4x6,4x8,5x9,6x8）＋ 6x10 のどれかに限定
     /// </summary>
     /// <param name="texture"></param>
     /// <returns></returns>
@@ -576,6 +588,10 @@ public class QuiltFileLoader : MonoBehaviour
                         ));
             }
         }
+        // これまであった 6x10 を追加
+        tilingPresets.Add(
+            new Quilt.Settings(texture.width, texture.height, 6, 10, 60)
+            );
 
         // どれも候補に残らなければ初期指定のTilingにしておく
         if (tilingPresets.Count < 1)
