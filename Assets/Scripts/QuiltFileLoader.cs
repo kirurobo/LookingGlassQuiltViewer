@@ -70,7 +70,8 @@ public class QuiltFileLoader : MonoBehaviour
         videoPlayer = FindObjectOfType<VideoPlayer>();
         if (videoPlayer)
         {
-            videoRenderTexture = new RenderTexture(4096, 4096, 24);
+            //videoRenderTexture = new RenderTexture(4096, 4096, 24);
+            videoRenderTexture = new RenderTexture(4096, 4096, 32);
             videoPlayer.targetTexture = videoRenderTexture;
 
             videoPlayer.seekCompleted += VideoPlayer_seekCompleted;
@@ -135,6 +136,7 @@ public class QuiltFileLoader : MonoBehaviour
                 LoadFile(GetNextFile(1));
             }
 
+            // 開かれているファイル名を表示
             if (ButtonManager.GetButtonDown(ButtonType.CIRCLE))
             {
                 ShowFilename(currentFile);
@@ -147,6 +149,7 @@ public class QuiltFileLoader : MonoBehaviour
         // 右ボタンが押されていることを表示
         if (nextIndicator) nextIndicator.SetActive((ButtonManager.GetButton(ButtonType.RIGHT) || Input.GetKey(KeyCode.RightArrow)));
 
+        //UpdateVideo();
         UpdateMessage();
         //UpdateIndicator();
     }
@@ -162,6 +165,22 @@ public class QuiltFileLoader : MonoBehaviour
         // スタンドアローンなら、アプリケーションを終了
         Application.Quit();
 #endif
+    }
+
+    /// <summary>
+    /// 動画再生中ならばテクスチャを更新
+    /// </summary>
+    private void UpdateVideo()
+    {
+        if (videoPlayer && videoPlayer.isPlaying && texture)
+        {
+            // 動画再生中ならば、内容を Texture2D として複製。たぶん重い。
+            RenderTexture currentRenderTexture = RenderTexture.active;
+            RenderTexture.active = videoRenderTexture;
+            texture.ReadPixels(new Rect(0, 0, texture.width, texture.height), 0, 0);
+            texture.Apply();
+            RenderTexture.active = currentRenderTexture;
+        }
     }
 
     /// <summary>
@@ -257,6 +276,13 @@ public class QuiltFileLoader : MonoBehaviour
         isLoading = true;
         currentFile = path;
 
+        // 動画は停止し初期状態に戻す
+        if (videoPlayer)
+        {
+            videoPlayer.targetTexture = videoRenderTexture;
+            videoPlayer.Stop();
+        }
+
         if (CheckMovieFile(path))
         {    // 動画を開く場合
             StartCoroutine("LoadMovieFileCoroutine", path);
@@ -337,14 +363,14 @@ public class QuiltFileLoader : MonoBehaviour
 
         ShowMessage("Loading the movie......", 0.5f);
         yield return new WaitForSecondsRealtime(0.5f);  // フレームが表示されそうな時間、強制的に待つ
-        Debug.Log("Play movie");
+        //Debug.Log("Play movie");
 
         // Seek
         videoPlayer.frame = 0;
 
         yield return new WaitForEndOfFrame();
 
-        // 念のため毎回GCをしてみる…
+        // 念のため読み込み毎にGCをしてみる…
         System.GC.Collect();
 
         // フラグを読み込み完了とする
@@ -359,6 +385,7 @@ public class QuiltFileLoader : MonoBehaviour
             Destroy(texture);
 
             texture = new Texture2D(videoRenderTexture.width, videoRenderTexture.height);
+
             RenderTexture currentRenderTexture = RenderTexture.active;
             RenderTexture.active = videoRenderTexture;
             texture.ReadPixels(new Rect(0, 0, texture.width, texture.height), 0, 0);
@@ -369,8 +396,11 @@ public class QuiltFileLoader : MonoBehaviour
             holoplay.quiltPreset = Quilt.Preset.Custom;
             holoplay.SetupQuilt();
 
-            holoplay.overrideQuilt = texture;
+            //holoplay.overrideQuilt = texture;
+            holoplay.overrideQuilt = null;      // ←動画の場合直接 quiltRT に描画させるため
+
             holoplay.quiltRT.filterMode = FilterMode.Bilinear;
+            videoPlayer.targetTexture = holoplay.quiltRT;   // 動画の描画先をこちらにすることで表示
 
             //Debug.Log("Estimaged tiling: " + holoplay.customQuiltSettings.numViews);     // 選択されたTiling
         }
