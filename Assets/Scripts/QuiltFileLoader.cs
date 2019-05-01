@@ -17,11 +17,12 @@ public class QuiltFileLoader : MonoBehaviour
     Holoplay holoplay;
     Quilt.Settings defaultTiling;
 
-    public TMPro.TextMeshPro messageText;        // ファイル名等表示用のText
-    public GameObject prevIndicator;    // 前のファイルへ移動時に表示するオブジェクト
-    public GameObject nextIndicator;    // 次のファイルへ移動時に表示するオブジェクト
+    public TMPro.TextMeshPro messageText;       // ファイル名等表示用のText
+    public GameObject prevIndicator;            // 前のファイルへ移動時に表示するオブジェクト
+    public GameObject nextIndicator;            // 次のファイルへ移動時に表示するオブジェクト
 
-    public int FrameRate = 30;          // フレームレート指定 [fps]
+    public int frameRateForStill = 10;          // 静止画表示時のフレームレート指定 [fps]
+    public int frameRateForMovie = 60;          // 動画再生時のフレームレート指定 [fps]
 
     static readonly string[] imageExtensions = { "png", "jpg", "jpeg" };
     static readonly string[] movieExtensions = { "mp4", "webm", "mov", "avi" };
@@ -78,7 +79,7 @@ public class QuiltFileLoader : MonoBehaviour
         }
 
         // フレームレートを指定
-        Application.targetFrameRate = FrameRate;
+        Application.targetFrameRate = frameRateForStill;
 
         // 操作に対する表示は非表示にしておく
         if (nextIndicator) nextIndicator.SetActive(false);
@@ -285,10 +286,12 @@ public class QuiltFileLoader : MonoBehaviour
 
         if (CheckMovieFile(path))
         {    // 動画を開く場合
+            Application.targetFrameRate = frameRateForMovie;
             StartCoroutine("LoadMovieFileCoroutine", path);
         }
         else
         {   // 静止画を開く場合
+            Application.targetFrameRate = frameRateForStill;
 
             // もし動画が再生されていれば停止しておく
             if (videoPlayer && videoPlayer.isPlaying)
@@ -377,6 +380,10 @@ public class QuiltFileLoader : MonoBehaviour
         isLoading = false;
     }
 
+    /// <summary>
+    /// 動画の準備が整ったらタイル数推定を行って描画開始
+    /// </summary>
+    /// <param name="source"></param>
     private void VideoPlayer_seekCompleted(VideoPlayer source)
     {
         if (holoplay)

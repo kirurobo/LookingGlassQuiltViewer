@@ -750,7 +750,7 @@ MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInternal: {fileID: 0}
   m_GameObject: {fileID: 1473799047}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: aacff3143feb59b4a817f4a68d982ead, type: 3}
   m_Name: 
@@ -771,7 +771,8 @@ MonoBehaviour:
   messageText: {fileID: 117062891}
   prevIndicator: {fileID: 1179493967}
   nextIndicator: {fileID: 1321660240}
-  FrameRate: 30
+  frameRateForStill: 10
+  frameRateForMovie: 60
 --- !u!4 &1473799050
 Transform:
   m_ObjectHideFlags: 0
