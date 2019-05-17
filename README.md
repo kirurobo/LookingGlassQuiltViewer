@@ -17,13 +17,12 @@ Released under the MIT License
 https://github.com/kirurobo/LookingGlassQuiltViewer/blob/master/LICENSE
 
 
-## HoloPlay SDK
+## HoloPlay SDK [(Link)](https://docs.lookingglassfactory.com/Unity/)
 LICENSE 
-[(TEXT)](https://github.com/kirurobo/LookingGlassQuiltViewer/blob/master/Assets/HoloPlay/LICENSE.txt) 
 [(PDF)](https://github.com/kirurobo/LookingGlassQuiltViewer/blob/master/Assets/HoloPlay/License.pdf)  
 Copyright 2017-18 Looking Glass Factory Inc. All rights reserved.
 
-## UnityStandaloneFileBrowser
+## UnityStandaloneFileBrowser [(Link)](https://github.com/gkngkc/UnityStandaloneFileBrowser)
 Copyright (c) 2017 Gökhan Gökçe  
 Released under the MIT License  
 https://github.com/gkngkc/UnityStandaloneFileBrowser/blob/master/LICENSE.txt  
