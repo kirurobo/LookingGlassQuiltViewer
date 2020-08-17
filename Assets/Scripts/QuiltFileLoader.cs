@@ -216,7 +216,7 @@ public class QuiltFileLoader : MonoBehaviour
 
     private void ShowFilename(string path)
     {
-        string dir = Path.GetDirectoryName(path);
+        string dir = Path.GetFileName(Path.GetDirectoryName(path));
         string file = Path.GetFileName(path);
         ShowMessage(
             "<size=10><color=#FFFFFF>" + file + "</color></size>"
@@ -600,8 +600,8 @@ public class QuiltFileLoader : MonoBehaviour
     }
 
     /// <summary>
-    /// タイル数を推定
-    /// プリセットにあるパターン（4x6,4x8,5x9,6x8）＋ 6x10 のどれかに限定
+    /// 自己相関からタイル数を推定する
+    /// プリセットにあるパターン（4x6,4x8,5x9,6x8）および 6x10, 5x10-2 のどれかに限定
     /// </summary>
     /// <param name="texture"></param>
     /// <returns></returns>
@@ -626,10 +626,12 @@ public class QuiltFileLoader : MonoBehaviour
                         ));
             }
         }
-        // これまであった 6x10 を追加
-        tilingPresets.Add(
-            new Quilt.Settings(texture.width, texture.height, 6, 10, 60)
-            );
+
+        // 6x10 のパターンも追加で調べる
+        tilingPresets.Add(new Quilt.Settings(texture.width, texture.height, 6, 10, 60));
+
+        // 5x10-2 == 48 のパターンもさらに調べる
+        tilingPresets.Add(new Quilt.Settings(texture.width, texture.height, 5, 10, 48));
 
         // どれも候補に残らなければ初期指定のTilingにしておく
         if (tilingPresets.Count < 1)
@@ -656,20 +658,8 @@ public class QuiltFileLoader : MonoBehaviour
             {
                 for (int u = 0; u < preset.viewWidth; u += skip)
                 {
-                    //// まず、平均値を求める
-                    //Color sum = Color.clear;
-                    //for (int y = 0; y < preset.tilesY; y++)
-                    //{
-                    //    for (int x = 0; x < preset.tilesX; x++)
-                    //    {
-                    //        Color color = pixels[(y * preset.tileSizeY + v) * texture.width + (x * preset.tileSizeX + u)];
-                    //        sum += color;
-                    //    }
-                    //}
-                    //Color average = sum / preset.numViews;
-
                     // 中央タイルの画素を平均値の代わりに利用する
-                    //   （各タイル間ではわずかな違いしかないという前提）
+                    //   （各タイル間ではわずかな違いしかないと仮定）
                     int centerTileY = preset.viewRows / 2;
                     int centerTileX = preset.viewColumns / 2;
                     Color average = pixels[(centerTileY * preset.viewHeight+ v) * texture.width + (centerTileX * preset.viewWidth + u)];
