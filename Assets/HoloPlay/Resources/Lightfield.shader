@@ -37,6 +37,8 @@ Shader "Holoplay/Lightfield" {
 			float4 tile;
 			float4 viewPortion;
 			float4 aspect;
+			float fringe;
+			float verticalOffset; // just a dumb fix for macos in 2019.3
 			
 			// pass thru vert shader
 			v2f vert (appdata v) {
@@ -47,6 +49,9 @@ Shader "Holoplay/Lightfield" {
 			}
 			
 			fixed4 frag (v2f i) : SV_Target {
+				// just a dumb fix for macos in 2019.3
+				i.uv.y += verticalOffset;
+
 				// first handle aspect
 				// note: recreated this using step functions because my mac didn't like the conditionals
 				// if ((aspect.x > aspect.y && aspect.z < 0.5) || (aspect.x < aspect.y && aspect.z > 0.5))
@@ -86,6 +91,19 @@ Shader "Holoplay/Lightfield" {
 					quiltCoords *= viewPortion.xy;
 					col[subpixel] = tex2D(_MainTex, quiltCoords)[subpixel];
 				}
+
+				// fringe
+				// if fringe is negative, that means it's the odd pixels
+				// this is so we don't have to store a separate bool for odd or even
+				// so that's why we're adding ceil fringe
+				// if it's positive it's like we're adding 1
+				// so pixel 2 will become pixel 3 and 3 % 2 == 1
+				// and so our fringe amount will be multiplied by 1 instead of 0,
+				// so for a fringe of 0.2 would make the fringe amount 1 -> 0.8
+				float yPixel = i.uv.y * _ScreenParams.y + ceil(fringe * 0.5);
+				float fringeAmt = 1.0 - abs(fringe) * floor(fmod(yPixel, 2.0));
+				col *= fringeAmt;
+
 				return col;
 			}
 			ENDCG

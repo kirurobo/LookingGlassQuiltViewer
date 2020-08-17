@@ -12,7 +12,7 @@ A tiled (quilt) image viewer for the Looking Glass
 # License
 
 ## LookingGlassQuiltViewer
-Copyright (c) 2019 Kirurobo
+Copyright (c) 2019-2020 Kirurobo
 Released under the MIT License  
 https://github.com/kirurobo/LookingGlassQuiltViewer/blob/master/LICENSE
 

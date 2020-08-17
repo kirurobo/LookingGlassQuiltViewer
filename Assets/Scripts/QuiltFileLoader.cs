@@ -64,7 +64,8 @@ public class QuiltFileLoader : MonoBehaviour
 
         // Quiltのインスタンスを取得
         holoplay = FindObjectOfType<Holoplay>();
-        defaultTiling = Quilt.GetPreset(holoplay.quiltPreset);   // Tilingの初期設定を記憶しておく
+        defaultTiling = holoplay.quiltSettings;
+        //defaultTiling = Quilt.GetPreset(Quilt.Preset.Custom, holoplay.cal);   // Tilingの初期設定を記憶しておく
         holoplay.background = new Color(0, 0, 0, 0);             // 背景は透明にする
 
         // VideoPlayerのインスタンスを取得
@@ -323,7 +324,7 @@ public class QuiltFileLoader : MonoBehaviour
         // Quiltを読み込み
         texture = www.texture;
         holoplay.customQuiltSettings = GetTilingType(texture);
-        holoplay.quiltPreset = Quilt.Preset.Custom;
+        holoplay.SetQuiltPreset(Quilt.Preset.Custom);
         holoplay.overrideQuilt = texture;
 
         holoplay.SetupQuilt();
@@ -400,7 +401,7 @@ public class QuiltFileLoader : MonoBehaviour
             RenderTexture.active = currentRenderTexture;
 
             holoplay.customQuiltSettings = GetTilingType(texture);
-            holoplay.quiltPreset = Quilt.Preset.Custom;
+            //holoplay.quiltPreset = Quilt.Preset.Custom;
             holoplay.SetupQuilt();
 
             //holoplay.overrideQuilt = texture;

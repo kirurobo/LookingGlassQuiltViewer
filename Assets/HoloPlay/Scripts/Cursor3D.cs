@@ -27,6 +27,8 @@ namespace LookingGlass {
 		[System.NonSerialized] public Shader depthOnlyShader;
 		[System.NonSerialized] public Shader readDepthPixelShader;
 		[System.NonSerialized] public Material readDepthPixelMat;
+		public GameObject cursorGameObject;
+		private bool cursorGameObjectExists;
 		private bool frameRendered;
 		private Camera cursorCam;
 
@@ -35,6 +37,17 @@ namespace LookingGlass {
 		private Vector3 normal;
 		private Quaternion rotation;
 		private Quaternion localRotation;
+		private bool overObject;
+
+		// debug texture
+		public RenderTexture debugTexture;
+
+		//Additions for UI cursor by Duncan
+		[SerializeField] GameObject uiCursor;
+		Canvas parentCanvas;
+		Renderer rend;
+		public bool uiCursorMode;
+		//End
 
 		// returnable coordinates and normals
 		public Vector3 GetWorldPos() { Update(); return worldPos; }
@@ -42,12 +55,58 @@ namespace LookingGlass {
 		public Vector3 GetNormal() { Update(); return normal; }
 		public Quaternion GetRotation() { Update(); return rotation; }
 		public Quaternion GetLocalRotation() { Update(); return localRotation; }
-
-		public RenderTexture debugTexture;
+		public bool GetOverObject() { Update(); return overObject; }
 
 		void Start() {
 			if (disableSystemCursor) Cursor.visible = false;
+			cursorGameObjectExists = cursorGameObject != null;
+			//Duncan addition for 2D UI
+			if(uiCursor != null){
+				parentCanvas = uiCursor.GetComponentInParent<Canvas>();
+				rend = GetComponentInChildren<Renderer>();
+				InitializeCursor();
+			}
+			//end
 		}
+
+		//Duncan addition for 2D UI
+		void InitializeCursor(){
+			Vector2 pos;
+
+			RectTransformUtility.ScreenPointToLocalPointInRectangle(
+				parentCanvas.transform as RectTransform, Input.mousePosition,
+				parentCanvas.worldCamera,
+				out pos);
+		}
+
+		void MoveUICursor(Vector3 inputPos, GameObject uiCursor, Canvas parent){
+			Vector2 movePos;
+
+			RectTransformUtility.ScreenPointToLocalPointInRectangle(
+				parentCanvas.transform as RectTransform,
+				inputPos, null,
+				out movePos);
+
+			uiCursor.transform.position = parentCanvas.transform.TransformPoint(movePos);
+		}
+
+		bool Render2DCursorMode(int monitor, Vector3 mousePos){
+			if(monitor == 1){ //We're on the second monitor
+				if(uiCursor.activeSelf)
+					uiCursor.SetActive(false);
+				if(!rend.enabled)
+					rend.enabled = true;
+				return false;
+			} else{
+				if(!uiCursor.activeSelf)
+					uiCursor.SetActive(true);
+				if(rend.enabled)
+					rend.enabled = false;
+				MoveUICursor(mousePos, uiCursor, parentCanvas);
+				return true;
+			}
+		}
+		//End
 
 		void OnEnable() {
 			depthOnlyShader = Shader.Find("Holoplay/DepthOnly");
@@ -78,17 +137,30 @@ namespace LookingGlass {
 			var colorRT = RenderTexture.GetTemporary(
 				w, h, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.Linear, 1);
 			colorRT.filterMode = FilterMode.Point; // important to avoid some weird edge cases
+			colorRT.antiAliasing = 1;
 			var depthNormalsRT = RenderTexture.GetTemporary(
 				1, 1, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.Linear);
 			cursorCam.targetTexture = colorRT;
+			cursorCam.allowMSAA = false;
 			float halfNormal = 0.5f;
-			float midpointDist = holoplay.nearClipFactor / (holoplay.nearClipFactor + holoplay.farClipFactor);
-			Color bgColor = new Color(halfNormal, halfNormal, midpointDist, midpointDist);
+			Color bgColor = new Color(halfNormal, halfNormal, 1f, 1f);
 			cursorCam.backgroundColor = QualitySettings.activeColorSpace == ColorSpace.Gamma ? 
 				bgColor : bgColor.gamma;	
 			cursorCam.clearFlags = CameraClearFlags.SolidColor;
 			cursorCam.cullingMask &= ~Physics.IgnoreRaycastLayer;
+			// disable cursor game object before rendering
+			bool cursorObjectEnabled = true;
+			if (cursorGameObjectExists) {
+				cursorObjectEnabled = cursorGameObject.activeSelf;
+				if (cursorObjectEnabled) {
+					cursorGameObject.SetActive(false);
+				}
+			}
 			cursorCam.RenderWithShader(depthOnlyShader, "RenderType");
+			// turn cursor object back on
+			if (cursorGameObjectExists && cursorObjectEnabled) {
+				cursorGameObject.SetActive(true);
+			}
 				
 			// copy single pixel and sample it
 			// this keeps the ReadPixels from taking forever
@@ -99,9 +171,14 @@ namespace LookingGlass {
 			foreach (var d in Display.displays) {
 				if (d.active) activeDisplays++;	
 			}
+
+			//Duncan addition for 2D UI
+			int monitor = 0;
+			//End
+
 			if (Application.platform == RuntimePlatform.WindowsPlayer && activeDisplays > 1) {
 				mousePos = Display.RelativeMouseAt(new Vector3(Input.mousePosition.x, Input.mousePosition.y));
-				int monitor = Mathf.RoundToInt(mousePos.z);
+				monitor = Mathf.RoundToInt(mousePos.z);
 				if (Display.displays.Length > monitor) {
 					monitorW = Display.displays[monitor].renderingWidth;
 					monitorH = Display.displays[monitor].renderingHeight;
@@ -123,7 +200,10 @@ namespace LookingGlass {
 
 			// find world pos from depth
 			float depth = DecodeFloatRG(enc);
-			// bool hit = depth >= 0.01f;
+			overObject = depth < 1f;
+			if (!overObject) {
+				depth = holoplay.nearClipFactor / (holoplay.nearClipFactor + holoplay.farClipFactor);
+			}
 			// bool hit = true;
 			// depth = hit ? depth : 0.5f; // if nothing hit, default depth
 			depth = cursorCam.nearClipPlane + depth * (cursorCam.farClipPlane - cursorCam.nearClipPlane);
@@ -132,6 +212,16 @@ namespace LookingGlass {
 			localPos = holoplay.transform.InverseTransformPoint(worldPos);
 			if (isActiveAndEnabled)
 				transform.position = worldPos;
+
+
+			//Duncan addition for 2D UI
+			if(uiCursor != null){
+				//I don't like that I need to return a bool here
+				//It's because OrbitControl.cs also handles some 3D cursor rendering logic for multi-touch stuff
+				//Would like to find a way to clean this up
+				uiCursorMode = Render2DCursorMode(monitor, mousePos);
+			}
+			//End
 
 			// find world normal based on view normal
 			normal = DecodeViewNormalStereo(enc);
@@ -175,5 +265,12 @@ namespace LookingGlass {
 			Vector2 kDecodeDot = new Vector2(1.0f, 1.0f/255.0f);
 			return Vector2.Dot(encxy, kDecodeDot);
 		}
+
+		//Duncan addition to handle file opening cursor logic
+		public void Refocused(){
+			if(disableSystemCursor)
+				Cursor.visible = false;
+		}
+		//end
 	}
 }

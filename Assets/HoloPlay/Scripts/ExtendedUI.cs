@@ -14,14 +14,14 @@ namespace LookingGlass {
         public Camera bgCam;
         [Tooltip("Copies the Holoplay camera position and settings to the UI's background camera")]
         public bool copyBGCamSettings;
-        bool singleDisplayMode = true;
+        public bool singleDisplayMode = true;
 
         void OnEnable() {
-#if UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX
-            Debug.Log("[Holoplay] Multi-display not supported on OSX");
+#if UNITY_EDITOR_OSX || UNITY_STANDALONE_OSX || UNITY_EDITOR_LINUX || UNITY_STANDALONE_LINUX
+            Debug.Log("[Holoplay] Multi-display not supported on OSX or Linux.");
             bgCam.enabled = false;
             canvas.targetDisplay = 0;
-            holoplay.targetDisplay = Plugin.GetLKGunityIndex(0);
+            holoplay.targetDisplay = PluginCore.GetLKGunityIndex(0);
             singleDisplayMode = true;
 #else 
             singleDisplayMode = false;
@@ -33,8 +33,8 @@ namespace LookingGlass {
                 bgCam.enabled = false;
                 return;
             }
-            Plugin.PopulateLKGDisplays();
-            if (Plugin.GetLKGcount() < 1) {
+            PluginCore.GetLoadResults();
+            if (CalibrationManager.GetCalibrationCount() < 1) {
                 Debug.Log("[Holoplay] No LKG detected for extended UI");
                 bgCam.enabled = false;
                 holoplay.targetDisplay = 0;
@@ -42,10 +42,24 @@ namespace LookingGlass {
             }
             // continue with actual extended ui logic
             // set Holoplay target display to the lkg display
-            holoplay.targetDisplay = Plugin.GetLKGunityIndex(0);
+            holoplay.targetDisplay = PluginCore.GetLKGunityIndex(0);
             holoplay.ReloadCalibration(); // must reload calibration after setting targetdisplay
-            if (!Application.isEditor)
+            if (!Application.isEditor){
                 Display.displays[holoplay.targetDisplay].Activate();
+                // Display.displays[holoplay.targetDisplay].SetRenderingResolution(holoplay.cal.screenHeight,
+                // holoplay.cal.screenHeight);
+                // TODO: nothing works here
+// #if UNITY_STANDALONE_WIN
+//                 Display.displays[holoplay.targetDisplay].SetParams(
+// 					holoplay.cal.screenWidth, holoplay.cal.screenHeight,
+// 					holoplay.cal.xpos, holoplay.cal.ypos
+// 				);
+// 				Debug.LogFormat("{0}, {1}, {2}, {3}", 
+//                     holoplay.cal.screenWidth, holoplay.cal.screenHeight,
+// 					holoplay.cal.xpos, holoplay.cal.ypos);
+// #endif
+            }
+                
             // set the canvas target display to the main display
             canvas.targetDisplay = 0;
             if (bgCam) {
@@ -62,7 +76,7 @@ namespace LookingGlass {
                     enabled = false;
                     return;
                 }
-                holoplay.targetDisplay = Plugin.GetLKGunityIndex(0);
+                holoplay.targetDisplay = PluginCore.GetLKGunityIndex(0);
                 if (bgCam && bgCam.enabled && copyBGCamSettings) {
                     bgCam.CopyFrom(holoplay.cam);
                     bgCam.targetDisplay = 0;

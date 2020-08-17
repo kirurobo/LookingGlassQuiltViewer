@@ -1,5 +1,5 @@
 The HoloPlay Unity SDK
-ver 1.0.0
+ver 1.2.1
 
 Please visit the docs site for explanations of how everything works:
 https://docs.lookingglassfactory.com/Unity/

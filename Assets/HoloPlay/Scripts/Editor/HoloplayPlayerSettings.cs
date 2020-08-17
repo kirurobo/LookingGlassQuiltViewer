@@ -1,0 +1,143 @@
+﻿using System;
+using System.Collections;
+using System.Collections.Generic;
+using UnityEditor;
+using UnityEngine;
+
+namespace LookingGlass {
+    [InitializeOnLoad]
+    public class HoloplayPlayerSettings : EditorWindow {
+
+        class setting
+        {
+            public string label;
+            public bool on;
+            public bool isQualitySetting;
+            public Action settingChange;
+            public setting(string label, bool on, bool isQualitySetting, Action settingChange)
+            {
+                this.label = label;
+                this.on = on;
+                this.isQualitySetting = isQualitySetting;
+                this.settingChange = settingChange;
+            }
+        }
+        List<setting> settings = new List<setting> {
+            new setting("Shadow Distance: 5000", true, true,
+                () => { QualitySettings.shadowDistance = 5000f; }
+            ),
+            new setting("Shadow Projection: Close Fit", true, true,
+                () => { QualitySettings.shadowProjection = ShadowProjection.CloseFit; }
+            ),
+            new setting("Splash Screen: off (pro/plus only)", true, false,
+                () => { PlayerSettings.SplashScreen.show = false; }
+            ),
+            new setting("Run in Background", true, false,
+                () => { PlayerSettings.runInBackground = true; }
+            ),
+            new setting("Resolution Dialog: enabled", true, false,
+                () => { PlayerSettings.displayResolutionDialog = ResolutionDialogSetting.Enabled; }
+            ),
+            new setting("Use Fullscreen Window", true, false,
+#if UNITY_2018_1_OR_NEWER
+                () => { PlayerSettings.fullScreenMode = FullScreenMode.FullScreenWindow; }
+#else
+                () => { PlayerSettings.defaultIsFullScreen = true; }
+#endif
+            ),
+        };
+
+        const string editorPrefName = "Holoplay_1.2.0_";
+
+        static HoloplayPlayerSettings()
+        {
+            EditorApplication.update += CheckIfPromptedYet;
+        }
+
+        //***********/
+        //* methods */
+        //***********/
+
+        static void CheckIfPromptedYet()
+        {
+            if (!EditorPrefs.GetBool(editorPrefName + PlayerSettings.productName, false)) {
+                Init();
+            }
+            EditorApplication.update -= CheckIfPromptedYet;
+        }
+
+        [MenuItem("Holoplay/Setup Player Settings", false, 53)]
+        static void Init() {
+            HoloplayPlayerSettings window = EditorWindow.GetWindow<HoloplayPlayerSettings>();
+            window.Show();
+        }
+
+        void OnEnable() {
+            titleContent = new GUIContent("Holoplay Settings");
+            float spacing = EditorGUIUtility.singleLineHeight + EditorGUIUtility.standardVerticalSpacing;
+            Vector2 size = new Vector2(360, 130 + spacing * settings.Count);
+            maxSize = size;
+            minSize = size;
+        }
+
+        void OnGUI() {
+            EditorGUILayout.HelpBox(
+                "It is recommended you change the following project settings " +
+                "to ensure the best performance for your HoloPlay application",
+                MessageType.Warning
+            );
+
+            EditorGUILayout.LabelField("Select which options to change:", EditorStyles.miniLabel);
+
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            foreach (var s in settings) {
+                EditorGUILayout.BeginHorizontal();
+                s.on = EditorGUILayout.ToggleLeft(s.label, s.on);
+                EditorGUILayout.EndHorizontal();
+            }
+            EditorGUILayout.EndVertical();
+            EditorGUILayout.Space();
+
+            EditorGUILayout.BeginHorizontal();
+            GUI.backgroundColor = EditorGUIUtility.isProSkin ? Color.green : Color.Lerp(Color.green, Color.white, 0.5f);
+            if (GUILayout.Button("Apply Changes")) {
+                var qs = QualitySettings.names;
+                int currentQuality = QualitySettings.GetQualityLevel();
+
+                for (int i = 0; i < qs.Length; i++) {
+                    QualitySettings.SetQualityLevel(i, false);
+                    foreach (var setting in settings) {
+                        if (setting.isQualitySetting) {
+                            setting.settingChange();
+                        }
+                    }
+                }
+
+                foreach (var setting in settings) {
+                    if (!setting.isQualitySetting) {
+                        setting.settingChange();
+                    }
+                }
+
+                QualitySettings.SetQualityLevel(currentQuality, true);
+                EditorPrefs.SetBool(editorPrefName + PlayerSettings.productName, true);
+                Debug.Log("[Holoplay] Applied! By default, this popup will no longer appear, but you can access it by clicking Holoplay/Setup Player Settings");
+                Close();
+            }
+            EditorGUILayout.EndHorizontal();
+
+            EditorGUILayout.BeginHorizontal();
+            GUI.backgroundColor = EditorGUIUtility.isProSkin ? Color.yellow : Color.Lerp(Color.yellow, Color.white, 0.5f);
+
+            if (GUILayout.Button("Never display this popup again")) {
+                EditorPrefs.SetBool(editorPrefName + PlayerSettings.productName, true);
+                Debug.Log("[Holoplay] Player Settings popup hidden--" +
+                    "to show again, open in inspector window on HoloPlay Capture");
+                Close();
+            }
+
+            GUI.backgroundColor = Color.white;
+            EditorGUILayout.EndHorizontal();
+        }
+    }
+}

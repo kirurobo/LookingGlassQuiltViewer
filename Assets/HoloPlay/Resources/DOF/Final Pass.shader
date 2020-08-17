@@ -35,10 +35,31 @@ Shader "Holoplay/DOF/Final Pass"
 
 			sampler2D _MainTex;
 			float4 _MainTex_ST;
+			float4 _MainTex_TexelSize;
 			sampler2D blur1;
 			sampler2D blur2;
 			sampler2D blur3;
 			int testFocus;
+
+			// todo: move this into a cginc
+			float4 tile;
+			float4 viewPortion;
+			float4 ProjParams;
+
+			float4 getBounds(float2 uv, float txlMod) {
+				float2 nuv = floor(uv / viewPortion.xy * tile.xy) / tile.xy * viewPortion.xy;
+				float2 txl = _MainTex_TexelSize.xy * txlMod;
+				return float4(
+					nuv.x + txl.x, 
+					nuv.y + txl.y,
+					nuv.x + viewPortion.x / tile.x - txl.x,
+					nuv.y + viewPortion.y / tile.y - txl.y
+				);
+			}
+
+			float2 checkBounds(float2 uv, float4 bounds) {
+				return min(max(uv, bounds.xy), bounds.zw);
+			}
 
 			v2f vert (appdata v)
 			{
@@ -53,9 +74,9 @@ Shader "Holoplay/DOF/Final Pass"
 				// sample main tex
 				float4 color = tex2D(_MainTex, i.uv);
 
-				float4 c_blur1 = tex2D(blur1, i.uv);
-				float4 c_blur2 = tex2D(blur2, i.uv);
-				float4 c_blur3 = tex2D(blur3, i.uv);
+				float4 c_blur1 = tex2D(blur1, checkBounds(i.uv, getBounds(i.uv, 1.0)));
+				float4 c_blur2 = tex2D(blur2, checkBounds(i.uv, getBounds(i.uv, 2.0)));
+				float4 c_blur3 = tex2D(blur3, checkBounds(i.uv, getBounds(i.uv, 4.0)));
 
 				color = lerp(color, c_blur1, c_blur1.a);
 				color = lerp(color, c_blur2, c_blur2.a);

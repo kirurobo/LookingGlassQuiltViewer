@@ -65,9 +65,9 @@ namespace Kirurobo
 
 
                 // プロセスIDを取得
-                IntPtr pid;
+                long pid;
                 WinApi.GetWindowThreadProcessId(hWnd, out pid);     // IL2CPP かつ x86 だとクラッシュ？
-                ProcessId = pid.ToInt32();
+                ProcessId = (int)pid;
 
 #if ENABLE_IL2CPP
                 // プロセス名を取得
@@ -100,6 +100,16 @@ namespace Kirurobo
             {
                 return string.Format("HWND:{0} PID:{4} Proc:{1} Title:{2} Class:{3}", hWnd, ProcessName, Title, ClassName, ProcessId);
             }
+        }
+
+        /// <summary>
+        /// 透明化の方式
+        /// </summary>
+        public enum TransparentTypes
+        {
+            None = 0,
+            Alpha = 1,
+            ColorKey = 2,
         }
 
 
@@ -141,6 +151,17 @@ namespace Kirurobo
         /// 標準ウィンドウサイズの指定
         /// </summary>
         public Vector2 OriginalWindowSize;
+
+        /// <summary>
+        /// ウィンドウ透過方式
+        /// </summary>
+        public TransparentTypes TransparentType = TransparentTypes.Alpha;
+        private TransparentTypes _currentTransparentType = TransparentTypes.Alpha;
+
+        /// <summary>
+        /// Layered Windows で透過する色
+        /// </summary>
+        public Color32 ChromakeyColor = new Color32(1, 0, 1, 0);
 
         /// <summary>
         /// 元のウィンドウスタイル
@@ -254,9 +275,40 @@ namespace Kirurobo
                 IntPtr.Zero,
                 0, 0, (int)size.x, (int)size.y,
                 WinApi.SWP_NOMOVE | WinApi.SWP_NOZORDER
+                                  | WinApi.SWP_FRAMECHANGED | WinApi.SWP_NOOWNERZORDER
+                                  | WinApi.SWP_NOACTIVATE | WinApi.SWP_ASYNCWINDOWPOS
+            );
+        }
+
+        /// <summary>
+        /// Send window resize event.
+        /// </summary>
+        protected void ResetSize()
+        {
+            if (!IsActive) return;
+
+            // 今のサイズを記憶
+            Vector2 size = GetSize();
+            
+            // 1px横幅を広げて、リサイズイベントを強制的に起こす
+            WinApi.SetWindowPos(
+                hWnd,
+                IntPtr.Zero,
+                0, 0, (int)size.x + 1, (int)size.y,
+                WinApi.SWP_NOMOVE | WinApi.SWP_NOZORDER
                 | WinApi.SWP_FRAMECHANGED | WinApi.SWP_NOOWNERZORDER
                 | WinApi.SWP_NOACTIVATE | WinApi.SWP_ASYNCWINDOWPOS
                 );
+            
+            // 元のサイズに戻す。この時もリサイズイベントは発生するはず
+            WinApi.SetWindowPos(
+                hWnd,
+                IntPtr.Zero,
+                0, 0, (int)size.x, (int)size.y,
+                WinApi.SWP_NOMOVE | WinApi.SWP_NOZORDER
+                                  | WinApi.SWP_FRAMECHANGED | WinApi.SWP_NOOWNERZORDER
+                                  | WinApi.SWP_NOACTIVATE | WinApi.SWP_ASYNCWINDOWPOS
+            );
         }
 
         /// <summary>
@@ -430,7 +482,7 @@ namespace Kirurobo
         }
 
         [MonoPInvokeCallback(typeof(WinApi.EnumWindowsDelegate))]
-        private static bool EnumCallback(IntPtr hWnd, IntPtr lParam)
+        private static bool EnumCallback(IntPtr hWnd, long lParam)
         {
             hWndList.Add(hWnd);
             return true;
@@ -453,7 +505,8 @@ namespace Kirurobo
             List<WindowHandle> windowList = new List<WindowHandle>();
             foreach (IntPtr hwnd in hWndList)
             {
-                if (WinApi.IsWindow(hwnd)) {
+                if (WinApi.IsWindow(hwnd))
+                {
                     WindowHandle window = new WindowHandle(hwnd);
                     windowList.Add(window);
                 }
@@ -481,6 +534,7 @@ namespace Kirurobo
 
         /// <summary>
         /// ウィンドウスタイルを監視して、替わっていれば戻す
+        /// また変化があればTrueを返す
         /// </summary>
         public void Update()
         {
@@ -517,25 +571,40 @@ namespace Kirurobo
                 // 枠無しウィンドウにする
                 EnableBorderless(true);
 
-                EnableTransparentByDWM();
-
-                // ウィンドウ再描画
-                WinApi.ShowWindow(hWnd, WinApi.SW_SHOW);
-                SetSize(GetSize());
+                switch (TransparentType)
+                {
+                    case TransparentTypes.Alpha:
+                        EnableTransparentByDWM();
+                        break;
+                    case TransparentTypes.ColorKey:
+                        EnableTransparentBySetLayered();
+                        break;
+                }
             }
             else
             {
-                DisableTransparentByDWM();
+                // 現在の指定ではなく、透過にした時点の指定に基づいて無効化
+                switch (_currentTransparentType)
+                {
+                    case TransparentTypes.Alpha:
+                        DisableTransparentByDWM();
+                        break;
+                    case TransparentTypes.ColorKey:
+                        DisableTransparentBySetLayered();
+                        break;
+                }
 
-                // ウィンドウスタイルを戻す
+                // 枠ありウィンドウにする
                 EnableBorderless(false);
 
                 // 操作の透過をやめる
                 EnableClickThrough(false);
-
-                // サイズ変更イベントを発生させる
-                SetSize(GetSize());
             }
+
+            _currentTransparentType = TransparentType;
+
+            // ウィンドウ枠の分サイズが変わった際、Unityにリサイズイベントを発生させないとサイズがずれる
+            ResetSize();
 
             // ウィンドウ再描画
             WinApi.ShowWindow(hWnd, WinApi.SW_SHOW);
@@ -552,7 +621,44 @@ namespace Kirurobo
             // 枠のみGlassにする
             //	※ 本来のウィンドウが何らかの範囲指定でGlassにしていた場合は、残念ながら表示が戻りません
             DwmApi.MARGINS margins = new DwmApi.MARGINS(0, 0, 0, 0);
-            DwmApi.DwmExtendFrameIntoClientArea(hWnd, margins);
+            DwmApi.DwmExtendFrameIntoClientArea(hWnd, ref margins);
+        }
+
+        /// <summary>
+        /// SetLayeredWindowsAttributes によって指定色を透過させる
+        /// </summary>
+        private void EnableTransparentBySetLayered()
+        {
+#if UNITY_EDITOR
+            // エディタの場合、設定すると描画が更新されなくなってしまう
+#else
+            long exstyle = this.CurrentWindowExStyle;
+            exstyle |= WinApi.WS_EX_LAYERED;
+            this.CurrentWindowExStyle = exstyle;
+            WinApi.SetWindowLong(hWnd, WinApi.GWL_EXSTYLE, this.CurrentWindowExStyle);
+
+            Color32 color32 = ChromakeyColor;
+            WinApi.COLORREF cref = new WinApi.COLORREF(color32.r, color32.g, color32.b);
+            WinApi.SetLayeredWindowAttributes(hWnd, cref, 0xFF, WinApi.LWA_COLORKEY);
+#endif
+        }
+
+        /// <summary>
+        /// SetLayeredWindowsAttributes によって指定色を透過させる
+        /// </summary>
+        private void DisableTransparentBySetLayered()
+        {
+#if UNITY_EDITOR
+            // エディタの場合、設定すると描画が更新されなくなってしまう
+#else
+            WinApi.COLORREF cref = new WinApi.COLORREF(0, 0, 0);
+            WinApi.SetLayeredWindowAttributes(hWnd, cref, 0xFF, WinApi.LWA_ALPHA);
+
+            long exstyle = this.CurrentWindowExStyle;
+            exstyle &= ~WinApi.WS_EX_LAYERED;
+            this.CurrentWindowExStyle = exstyle;
+            WinApi.SetWindowLong(hWnd, WinApi.GWL_EXSTYLE, this.CurrentWindowExStyle);
+#endif
         }
 
         /// <summary>
@@ -591,24 +697,41 @@ namespace Kirurobo
         {
             if (!IsActive) return;
 
+            // Layered Window での透過時は、操作透過はOSで行われる
+            if (_currentTransparentType == TransparentTypes.ColorKey) return;
+
 #if UNITY_EDITOR
             // エディタの場合は操作の透過はやめておく
+            //if (isClickThrough)
+            //{
+            //    long exstyle = this.CurrentWindowExStyle;
+            //    exstyle |= WinApi.WS_EX_TRANSPARENT;
+            //    //exstyle |= WinApi.WS_EX_LAYERED;
+            //    this.CurrentWindowExStyle = exstyle;
+            //    WinApi.SetWindowLong(hWnd, WinApi.GWL_EXSTYLE, this.CurrentWindowExStyle);
+            //}
+            //else
+            //{
+            //    this.CurrentWindowExStyle = this.OriginalWindowExStyle;
+            //    if (enableFileDrop) this.CurrentWindowExStyle |= WinApi.WS_EX_ACCEPTFILES;
+            //    WinApi.SetWindowLong(hWnd, WinApi.GWL_EXSTYLE, this.CurrentWindowExStyle);
+            //}
 #else
-        // エディタでなければ操作を透過
-        if (isClickThrough)
-        {
-            long exstyle = this.CurrentWindowExStyle;
-            exstyle |= WinApi.WS_EX_TRANSPARENT;
-            exstyle |= WinApi.WS_EX_LAYERED;
-            this.CurrentWindowExStyle = exstyle;
-            WinApi.SetWindowLong(hWnd, WinApi.GWL_EXSTYLE, this.CurrentWindowExStyle);
-        }
-        else
-        {
-            this.CurrentWindowExStyle = this.OriginalWindowExStyle;
-            if (enableFileDrop) this.CurrentWindowExStyle |= WinApi.WS_EX_ACCEPTFILES;
-            WinApi.SetWindowLong(hWnd, WinApi.GWL_EXSTYLE, this.CurrentWindowExStyle);
-        }
+            // エディタでなければ操作を透過
+            if (isClickThrough)
+            {
+                long exstyle = this.CurrentWindowExStyle;
+                exstyle |= WinApi.WS_EX_TRANSPARENT;
+                exstyle |= WinApi.WS_EX_LAYERED;
+                this.CurrentWindowExStyle = exstyle;
+                WinApi.SetWindowLong(hWnd, WinApi.GWL_EXSTYLE, this.CurrentWindowExStyle);
+            }
+            else
+            {
+                this.CurrentWindowExStyle = this.OriginalWindowExStyle;
+                if (enableFileDrop) this.CurrentWindowExStyle |= WinApi.WS_EX_ACCEPTFILES;
+                WinApi.SetWindowLong(hWnd, WinApi.GWL_EXSTYLE, this.CurrentWindowExStyle);
+            }
 #endif
         }
 
@@ -678,6 +801,21 @@ namespace Kirurobo
             WinApi.POINT point;
             WinApi.GetCursorPos(out point);
             return new Vector2(point.x, point.y);
+        }
+
+        /// <summary>
+        /// マウスカーソルが表示中かどうかを取得
+        /// </summary>
+        /// <returns>true:Showing, false:Hidden or Suppressed</returns>
+        static public bool GetCursorVisible()
+        {
+            WinApi.CURSORINFO cinfo = new WinApi.CURSORINFO();
+            cinfo.cbSize = System.Runtime.InteropServices.Marshal.SizeOf(cinfo);
+            if (WinApi.GetCursorInfo(ref cinfo))
+            {
+                return (cinfo.flags == 0) || ((cinfo.flags & 2) > 0);
+            }
+            return true;
         }
 
         /// <summary>

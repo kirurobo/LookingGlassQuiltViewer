@@ -34,14 +34,16 @@ Shader "Holoplay/DOF/Pass Depth"
 			};
 
 			sampler2D _MainTex; 
-			sampler2D _CameraDepthTexture;
 			float4 _MainTex_ST;
 			float4 _MainTex_TexelSize;
+			float4 ProjParams;
+
+			sampler2D QuiltDepth;
 
 			float linearDepth(float depthSample) {
 				return 
-					_ProjectionParams.y * depthSample /
-					(depthSample * (_ProjectionParams.y - _ProjectionParams.z) + _ProjectionParams.z);
+					ProjParams.y * depthSample /
+					(depthSample * (ProjParams.y - ProjParams.z) + ProjParams.z);
 			}
 
 			v2f vert (appdata v) {
@@ -55,9 +57,9 @@ Shader "Holoplay/DOF/Pass Depth"
 				// sample depth
 				float4 color = tex2D(_MainTex, i.uv);
 				#ifdef UNITY_REVERSED_Z
-				float depth = 1.0 - SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, i.uv);
+				float depth = 1.0 - SAMPLE_DEPTH_TEXTURE(QuiltDepth, i.uv);
 				#else
-				float depth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, i.uv);
+				float depth = SAMPLE_DEPTH_TEXTURE(QuiltDepth, i.uv);
 				#endif
 				depth = linearDepth(depth);
 				color.a = depth;

@@ -47,11 +47,29 @@ Shader "Holoplay/DOF/Box Blur"
 				// w: 1.0 / (dofparams.w - dofparams.z)
 			float focalLength;
 				// capture.GetAdjustedDistance());
+			float4 tile;
+			float4 viewPortion;
+			float4 ProjParams;
+
+			float4 getBounds(float2 uv) {
+				float2 nuv = floor(uv / viewPortion.xy * tile.xy) / tile.xy * viewPortion.xy;
+				float2 txl = _MainTex_TexelSize.xy * 2.0;
+				return float4(
+					nuv.x + txl.x, 
+					nuv.y + txl.y,
+					nuv.x + viewPortion.x / tile.x - txl.x,
+					nuv.y + viewPortion.y / tile.y - txl.y
+				);
+			}
+
+			float2 checkBounds(float2 uv, float4 bounds) {
+				return min(max(uv, bounds.xy), bounds.zw);
+			}
 
 			float depthDist(float depthSample) {
 				return
-					_ProjectionParams.y + depthSample * 
-					(_ProjectionParams.z - _ProjectionParams.y);
+					ProjParams.y + depthSample * 
+					(ProjParams.z - ProjParams.y);
 			}
 
 			v2f vert (appdata v) {
@@ -62,6 +80,8 @@ Shader "Holoplay/DOF/Box Blur"
 			}
 
 			fixed4 frag (v2f i) : SV_Target {
+				float4 bounds = getBounds(i.uv);
+
 				// sample the color and save the depth to alpha
 				// note: the number of samples seems to be trivial in profiler
 				// 3 4 5
@@ -71,18 +91,18 @@ Shader "Holoplay/DOF/Box Blur"
 				// 3 1 0 2 4 if horizontal only 
 				float2 txl = _MainTex_TexelSize.xy * blurSize;
 				float4 color  = tex2D(_MainTex, i.uv);
-				float4 color1 = tex2D(_MainTex, i.uv + txl * float2( 1,  0));
-				float4 color2 = tex2D(_MainTex, i.uv + txl * float2(-1,  0));
+				float4 color1 = tex2D(_MainTex, checkBounds(i.uv + txl * float2( 1,  0), bounds));
+				float4 color2 = tex2D(_MainTex, checkBounds(i.uv + txl * float2(-1,  0), bounds));
 				#if !defined(_HORIZONTAL_ONLY)
-				float4 color3 = tex2D(_MainTex, i.uv + txl * float2(-1,  1));
-				float4 color4 = tex2D(_MainTex, i.uv + txl * float2( 0,  1));
-				float4 color5 = tex2D(_MainTex, i.uv + txl * float2( 1,  1));
-				float4 color6 = tex2D(_MainTex, i.uv + txl * float2(-1, -1));
-				float4 color7 = tex2D(_MainTex, i.uv + txl * float2( 0, -1));
-				float4 color8 = tex2D(_MainTex, i.uv + txl * float2( 1, -1));
+				float4 color3 = tex2D(_MainTex, checkBounds(i.uv + txl * float2(-1,  1), bounds));
+				float4 color4 = tex2D(_MainTex, checkBounds(i.uv + txl * float2( 0,  1), bounds));
+				float4 color5 = tex2D(_MainTex, checkBounds(i.uv + txl * float2( 1,  1), bounds));
+				float4 color6 = tex2D(_MainTex, checkBounds(i.uv + txl * float2(-1, -1), bounds));
+				float4 color7 = tex2D(_MainTex, checkBounds(i.uv + txl * float2( 0, -1), bounds));
+				float4 color8 = tex2D(_MainTex, checkBounds(i.uv + txl * float2( 1, -1), bounds));
 				#else
-				float4 color3 = tex2D(_MainTex, i.uv + txl * float2(-2,  0));
-				float4 color4 = tex2D(_MainTex, i.uv + txl * float2( 2,  0));
+				float4 color3 = tex2D(_MainTex, checkBounds(i.uv + txl * float2(-2,  0), bounds));
+				float4 color4 = tex2D(_MainTex, checkBounds(i.uv + txl * float2( 2,  0), bounds));
 				#endif
 
 
@@ -116,24 +136,24 @@ Shader "Holoplay/DOF/Box Blur"
 				// second sampling to eliminate ghosting.
 				// only using the depth here.
 				txl = _MainTex_TexelSize.xy * (blurSize * 2.0);
-				color1 = tex2D(_MainTex, i.uv + txl * float2(-1,  0));
-				color2 = tex2D(_MainTex, i.uv + txl * float2( 1,  0));
+				color1 = tex2D(_MainTex, checkBounds(i.uv + txl * float2(-1,  0), bounds));
+				color2 = tex2D(_MainTex, checkBounds(i.uv + txl * float2( 1,  0), bounds));
 				#if !defined(_HORIZONTAL_ONLY)
-				color3 = tex2D(_MainTex, i.uv + txl * float2(-1,  1));
-				color4 = tex2D(_MainTex, i.uv + txl * float2( 0,  1));
-				color5 = tex2D(_MainTex, i.uv + txl * float2( 1,  1));
-				color6 = tex2D(_MainTex, i.uv + txl * float2(-1, -1));
-				color7 = tex2D(_MainTex, i.uv + txl * float2( 0, -1));
-				color8 = tex2D(_MainTex, i.uv + txl * float2( 1, -1));
+				color3 = tex2D(_MainTex, checkBounds(i.uv + txl * float2(-1,  1), bounds));
+				color4 = tex2D(_MainTex, checkBounds(i.uv + txl * float2( 0,  1), bounds));
+				color5 = tex2D(_MainTex, checkBounds(i.uv + txl * float2( 1,  1), bounds));
+				color6 = tex2D(_MainTex, checkBounds(i.uv + txl * float2(-1, -1), bounds));
+				color7 = tex2D(_MainTex, checkBounds(i.uv + txl * float2( 0, -1), bounds));
+				color8 = tex2D(_MainTex, checkBounds(i.uv + txl * float2( 1, -1), bounds));
 				#else
-				color3 = tex2D(_MainTex, i.uv + txl * float2(-2,  0));
-				color4 = tex2D(_MainTex, i.uv + txl * float2( 2,  0));
-				float4 color5 = tex2D(_MainTex, i.uv + txl * float2( 0,  1));
-				float4 color6 = tex2D(_MainTex, i.uv + txl * float2( 0, -1));
-				float4 color7 = tex2D(_MainTex, i.uv + txl * float2( 1,  1));
-				float4 color8 = tex2D(_MainTex, i.uv + txl * float2( 1, -1));
-				float4 color9 = tex2D(_MainTex, i.uv + txl * float2(-1,  1));
-				float4 color10= tex2D(_MainTex, i.uv + txl * float2(-1, -1));
+				color3 = tex2D(_MainTex, checkBounds(i.uv + txl * float2(-2,  0), bounds));
+				color4 = tex2D(_MainTex, checkBounds(i.uv + txl * float2( 2,  0), bounds));
+				float4 color5 = tex2D(_MainTex, checkBounds(i.uv + txl * float2( 0,  1), bounds));
+				float4 color6 = tex2D(_MainTex, checkBounds(i.uv + txl * float2( 0, -1), bounds));
+				float4 color7 = tex2D(_MainTex, checkBounds(i.uv + txl * float2( 1,  1), bounds));
+				float4 color8 = tex2D(_MainTex, checkBounds(i.uv + txl * float2( 1, -1), bounds));
+				float4 color9 = tex2D(_MainTex, checkBounds(i.uv + txl * float2(-1,  1), bounds));
+				float4 color10= tex2D(_MainTex, checkBounds(i.uv + txl * float2(-1, -1), bounds));
 				#endif
 
 				// take the nearest coc again, but with a bigger area

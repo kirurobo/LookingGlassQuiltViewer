@@ -7,11 +7,21 @@ using System.Collections.Generic;
 using UnityEngine;
 
 namespace LookingGlass {
+    // NOTE: holoplayer one button types are deprecated.
+    // they still map to 0, 1, 2, and 3 just like the Looking Glass buttons
+    // if you do not wish to refactor your code, you can add HOLOPLAYER_ONE_BUTTONS to your scripting define symbols
     public enum ButtonType {
-		SQUARE, ONE = 0,
-		LEFT, TWO = 1,
-		RIGHT, THREE = 2,
-		CIRCLE, FOUR = 3,
+		NONE = -1,
+		SQUARE = 0,
+		LEFT = 1,
+		RIGHT = 2,
+		CIRCLE = 3,
+#if HOLOPLAYER_ONE_BUTTONS
+        ONE = 0,
+		TWO = 1,
+		THREE = 2,
+		FOUR = 3,
+#endif
 	}
 
     [HelpURL("https://docs.lookingglassfactory.com/Unity/Scripts/ButtonManager/")]
@@ -70,14 +80,23 @@ namespace LookingGlass {
         }
 
         public static bool GetButton(ButtonType button) {
+            if (button == ButtonType.NONE) {
+                return false;
+            }
             return CheckButton((x) => UnityEngine.Input.GetKey(x), button);
         }
 
         public static bool GetButtonDown(ButtonType button) {
+            if (button == ButtonType.NONE) {
+                return false;
+            }
             return CheckButton((x) => UnityEngine.Input.GetKeyDown(x), button);
         }
 
         public static bool GetButtonUp(ButtonType button) {
+            if (button == ButtonType.NONE) {
+                return false;
+            }
             return CheckButton((x) => UnityEngine.Input.GetKeyUp(x), button);
         }
 
@@ -115,10 +134,10 @@ namespace LookingGlass {
 
         static KeyCode ButtonToNumberOnKeyboard(ButtonType button) {
             switch (button) {
-                case ButtonType.ONE: return KeyCode.Alpha1;
-                case ButtonType.TWO: return KeyCode.Alpha2;
-                case ButtonType.THREE: return KeyCode.Alpha3;
-                case ButtonType.FOUR: return KeyCode.Alpha4;
+                case ButtonType.SQUARE: return KeyCode.Alpha1;
+                case ButtonType.LEFT: return KeyCode.Alpha2;
+                case ButtonType.RIGHT: return KeyCode.Alpha3;
+                case ButtonType.CIRCLE: return KeyCode.Alpha4;
                 default: return KeyCode.Alpha1;
             }
         }

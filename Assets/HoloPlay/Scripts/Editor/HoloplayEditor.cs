@@ -4,11 +4,9 @@
 
 using UnityEngine;
 using UnityEditor;
-using UnityEditor.SceneManagement;
-using UnityEngine.SceneManagement;
 
 namespace LookingGlass {
-	[CustomEditor(typeof(Holoplay))]
+    [CustomEditor(typeof(Holoplay))]
 	[CanEditMultipleObjects]
 	public class HoloplayEditor : Editor {
 
@@ -48,7 +46,8 @@ namespace LookingGlass {
 		static Section advanced = new Section("fov", "quiltPreset", "Advanced Camera Settings");
 		static Section quilt = new Section("quiltPreset", "frustumColor", "Quilt Settings");
 		static Section gizmo = new Section("frustumColor", "onHoloplayReady", "Gizmo");
-		static Section events = new Section("onHoloplayReady", "", "Events");
+		static Section events = new Section("onHoloplayReady", "viewInterpolation", "Events");
+		static Section optimization = new Section("viewInterpolation", "", "Optimization");
 
 		public override void OnInspectorGUI() {
 			// psuedo custom inspector
@@ -64,14 +63,17 @@ namespace LookingGlass {
 					if (!quilt.DoSection(prop)) continue;
 					if (!gizmo.DoSection(prop)) continue;
 					if (!events.DoSection(prop)) continue;
+					if (!optimization.DoSection(prop)) continue;
 				
 					// skip custom quilt settings if preset not set to custom
-					if (prop.name == "customQuiltSettings" && hp.quiltPreset != Quilt.Preset.Custom) {
-						var qs = Quilt.GetPreset(hp.quiltPreset);
+					if (prop.name == "customQuiltSettings" && hp.GetQuiltPreset() != Quilt.Preset.Custom) {
+						var qs = Quilt.GetPreset(hp.GetQuiltPreset(), hp.cal);
+						// hp.SetQuiltPreset(qs);
 						EditorGUILayout.LabelField("Quilt Size: ", qs.quiltWidth + " x " + qs.quiltHeight);
 						EditorGUILayout.LabelField("View Size: ", qs.viewWidth + " x " + qs.viewHeight);
 						EditorGUILayout.LabelField("Tiling: ", qs.viewColumns + " x " + qs.viewRows);
 						EditorGUILayout.LabelField("Views Total: ", ""+qs.numViews);
+						// hp.SetupQuilt();
 						continue;
 					}
 
@@ -92,7 +94,7 @@ namespace LookingGlass {
 							Undo.RecordObject(hp, "Change Target Display");
 							hp.targetDisplay = (int)dt;
 							Preview.HandlePreview(false);
-						}
+						}  
 						continue;
 					}
 
@@ -111,7 +113,7 @@ namespace LookingGlass {
 				while (prop.NextVisible(false));
 			}
 			// because it's the last section and doesn't get closed out automatically, force this section to end
-			events.ForceEnd();
+			optimization.ForceEnd();
 
 			serializedObject.ApplyModifiedProperties();
 
@@ -121,20 +123,15 @@ namespace LookingGlass {
 			}
 			// reload calibration button
 			if (GUILayout.Button("Reload Calibration")){
-				hp.ReloadCalibration();
-				int calibrationCount = Plugin.CalibrationCount();
-				string logStr = calibrationCount == 0 ? 
-					"[HoloPlay] No calibration found" :
-					string.Format("[HoloPlay] Calibration reloaded! Found {0} calibrations", calibrationCount);
-				Debug.Log(logStr);
+                if(!hp.ReloadCalibration().calibrationFound){
+                    Preview.HandlePreview(false);
+                }
 			}
-			// version
-			// var versionStyle = new GUIStyle(EditorStyles.miniLabel);
-			// EditorGUILayout.LabelField("Version", Holoplay.Version.AsString, versionStyle);
-		}
+        }
 
 		protected virtual void OnSceneGUI() {
 			var hp = (Holoplay)target;
+			if (!hp.enabled) return;
 			if (!hp.drawHandles) return;
 			// for some reason, doesn't need the gamma conversion like gizmos do
 			Handles.color = hp.handleColor;
@@ -188,6 +185,11 @@ namespace LookingGlass {
 			Display6,
 			Display7,
 			Display8,
+		}
+
+		[MenuItem("Holoplay/Setup Player Settings", false, 1)]	
+		public static void OpenPlayerSettingsEditor() {
+
 		}
 	}
 }

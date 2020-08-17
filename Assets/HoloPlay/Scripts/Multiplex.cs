@@ -29,19 +29,21 @@ namespace LookingGlass {
 
 		// functions
 		void OnEnable() {
-			Plugin.PopulateLKGDisplays();
+			PluginCore.GetLoadResults();
+
 			// update warning
 			int i;
 			showUpdateWarning = false;
-			for (i = 0; i < Plugin.CalibrationCount(); i++) {
-				Calibration cal = new Calibration(i);
-				// Debug.Log(cal.GetLKGName());
-				if (cal.GetLKGName() == "LKG") {
+			for (i = 0; i < CalibrationManager.GetCalibrationCount(); i++) {
+				if (CalibrationManager.GetCalibration(i).LKGname == "LKG") {
 					showUpdateWarning = true;
 				}
 			}
 			initialSetup = true;
-		}
+            // Debug.Log("onenable");
+            Setup(initialSetup);
+            initialSetup = false;
+        }
 
 		void Update() {
 			Setup(initialSetup);
@@ -96,6 +98,7 @@ namespace LookingGlass {
 		}
 
 		void Setup(bool reloadCalibration = false) {
+            // Debug.Log("set up multiplxing");
 			// if there's no holoplays, just return
 			if (holoplays == null || holoplays.Length == 0) 
 				return;
@@ -108,15 +111,20 @@ namespace LookingGlass {
 			}
 			// return if it's not automatic arrangement
 			if (!automaticArrangement) return;
+            
+			LoadResults loadResults = PluginCore.GetLoadResults();
+			if(!loadResults.calibrationFound){
+				return;
+			}
 			// first sort displays
 			List<DisplayPositioner> targetDisplayPositions = new List<DisplayPositioner>();
-			for (int lkg = 0; lkg < Plugin.GetLKGcount(); lkg++) {
-				targetDisplayPositions.Add(new DisplayPositioner () {
+            for (int lkg = 0; lkg < CalibrationManager.GetCalibrationCount(); lkg++) {
+                targetDisplayPositions.Add(new DisplayPositioner () {
 					targetLKG = lkg,
-					targetDisplay = Plugin.GetLKGunityIndex(lkg),
+					targetDisplay = PluginCore.GetLKGunityIndex(lkg),
 					position = new Vector2Int(
-						Mathf.RoundToInt(Plugin.GetLKGxpos(lkg) / 100f),
-						Mathf.RoundToInt(Plugin.GetLKGypos(lkg) / 100f)
+						Mathf.RoundToInt(CalibrationManager.GetCalibration(lkg).xpos / 100f),
+						Mathf.RoundToInt(CalibrationManager.GetCalibration(lkg).ypos / 100f)
 					)
 				});
 			}
@@ -153,12 +161,15 @@ namespace LookingGlass {
 						if (targetDisplayPositions.Count > i) {
 							h.targetDisplay = targetDisplayPositions[i].targetDisplay;
 							h.targetLKG = targetDisplayPositions[i].targetLKG;
+                            h.cal.index = h.targetLKG;
+ 							// Debug.Log(h.name + " is set to be target at display " + h.targetDisplay);
 							h.ReloadCalibration ();
 							if (Display.displays.Length > h.targetDisplay) {
+								// Debug.Log("active display:"+h.targetDisplay);
 								Display.displays[h.targetDisplay].Activate();
 								Display.displays[h.targetDisplay].SetRenderingResolution(h.cal.screenWidth, h.cal.screenHeight);
 							}
-						} else {
+						} else {	
 							Debug.LogWarning("[Holoplay] Not enough displays connected for current multiview setup");
 						}
 					}
@@ -198,12 +209,12 @@ namespace LookingGlass {
 	[CanEditMultipleObjects]
 	public class MultiplexEditor : Editor {
 		void OnEnable() {
-			Plugin.PopulateLKGDisplays();
+			PluginCore.GetLoadResults();
 		}
 
 		public override void OnInspectorGUI() {
-#if UNITY_EDITOR_OSX
-			EditorGUILayout.HelpBox("Multiplexing is currently not supported on macOS", MessageType.Error);
+#if UNITY_EDITOR_OSX || UNITY_EDITOR_LINUX
+			EditorGUILayout.HelpBox("Multiplexing is currently not supported on macOS and Linux", MessageType.Error);
 #endif
 			DrawDefaultInspector();
 		}

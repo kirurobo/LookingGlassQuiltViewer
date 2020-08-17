@@ -5,8 +5,11 @@
  * License: CC0 https://creativecommons.org/publicdomain/zero/1.0/
  */
 
+using System;
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Serialization;
 #if UNITY_EDITOR
 using UnityEditor;
 using System.Reflection;
@@ -33,7 +36,6 @@ namespace Kirurobo
     /// </summary>
     public class WindowController : MonoBehaviour
     {
-
         /// <summary>
         /// Window controller
         /// </summary>
@@ -64,7 +66,7 @@ namespace Kirurobo
         /// </summary>
         public bool isTopmost
         {
-            get { return ((uniWin == null) ? _isTopmost : _isTopmost = uniWin.IsTopmost); }
+            get { return ((uniWin == null || !uniWin.IsActive) ? _isTopmost : _isTopmost = uniWin.IsTopmost); }
             set { SetTopmost(value); }
         }
         [SerializeField, BoolProperty, Tooltip("Check to set topmost on startup")]
@@ -75,7 +77,7 @@ namespace Kirurobo
         /// </summary>
         public bool isMaximized
         {
-            get { return ((uniWin == null) ? _isMaximized : _isMaximized = uniWin.IsMaximized); }
+            get { return ((uniWin == null || !uniWin.IsActive) ? _isMaximized : _isMaximized = uniWin.IsMaximized); }
             set { SetMaximized(value); }
         }
         [SerializeField, BoolProperty, Tooltip("Check to set maximized on startup")]
@@ -86,12 +88,16 @@ namespace Kirurobo
         /// </summary>
         public bool isMinimized
         {
-            get { return ((uniWin == null) ? _isMinimized : _isMinimized = uniWin.IsMinimized); }
+            get { return ((uniWin == null || !uniWin.IsActive) ? _isMinimized : _isMinimized = uniWin.IsMinimized); }
             set { SetMinimized(value); }
         }
         [SerializeField, BoolProperty, Tooltip("Check to set minimized on startup")]
         private bool _isMinimized = false;
 
+        private bool isInitiallyTopmost;
+        private bool isInitiallyMaximized;
+        private bool isInitiallyMinimized;
+        
         /// <summary>
         /// ファイルドロップを有効にするならば最初からtrueにしておく
         /// </summary>
@@ -110,8 +116,13 @@ namespace Kirurobo
         /// <summary>
         /// マウスドラッグでウィンドウを移動させるか
         /// </summary>
+        [Tooltip("Make the window draggable while a left mouse button is pressed")]
         public bool enableDragMove = true;
 
+        /// <summary>
+        /// 透過方式の指定
+        /// </summary>
+        [FormerlySerializedAs("transparentMethod")] public UniWinApi.TransparentTypes transparentType = UniWinApi.TransparentTypes.Alpha;
 
         // カメラの背景をアルファゼロの黒に置き換えるため、本来の背景を保存しておく変数
         private CameraClearFlags originalCameraClearFlags;
@@ -129,14 +140,41 @@ namespace Kirurobo
         private float opaqueThreshold = 0.1f;
 
         /// <summary>
+        /// The key color when the transparent type is color-key
+        /// </summary>
+        public Color32 keyColor
+        {
+            get { return (uniWin != null) ? uniWin.ChromakeyColor : new Color32(1, 0, 1, 0); }
+            set { if (uniWin != null) { uniWin.ChromakeyColor = value; } }
+        }
+
+        /// <summary>
         /// Pixel color under the mouse pointer. (Read only)
         /// </summary>
         [ReadOnly, Tooltip("Pixel color under the mouse pointer. (Read only)")]
         public Color pickedColor;
 
-
+        /// <summary>
+        /// 現在ドラッグ処理中ならばtrue
+        /// </summary>
         private bool isDragging = false;
-        private Vector2 lastMousePosition;
+
+        /// <summary>
+        /// ドラッグ開始時のウィンドウ内座標[px]
+        /// </summary>
+        private Vector2 dragStartedPosition;
+
+        /// <summary>
+        /// 描画の上にタッチがあればそのfingerIdが入る
+        /// </summary>
+        //[SerializeField]
+        private int activeFingerId = -1;
+
+        /// <summary>
+        /// 最後のドラッグはマウスによるものか、タッチによるものか
+        /// </summary>
+        //[SerializeField]
+        private bool wasUsingMouse;
 
         /// <summary>
         /// 現在対象としているウィンドウが自分自身らしいと確認できたらtrueとする
@@ -148,6 +186,11 @@ namespace Kirurobo
         /// </summary>
         private Camera currentCamera;
 
+        /// <summary>
+        /// タッチがBeganとなったものを受け渡すためのリスト
+        /// PickColorCoroutine()実行のタイミングではどうもtouch.phaseがうまくとれないようなのでこれで渡してみる
+        /// </summary>
+        private Touch? firstTouch = null;
 
         /// <summary>
         /// ファイルドロップ時のイベントハンドラー。 UniWinApiの OnFilesDropped にそのまま渡す。
@@ -173,6 +216,13 @@ namespace Kirurobo
         // Use this for initialization
         void Awake()
         {
+            // ウィンドウが準備できたタイミングで初期値を設定できるよう保存しておく
+            isInitiallyTopmost = _isTopmost;
+            isInitiallyMaximized = _isMaximized;
+            isInitiallyMinimized = _isMinimized;
+            
+            Input.simulateMouseWithTouches = false;
+
             if (!currentCamera)
             {
                 // メインカメラを探す
@@ -200,6 +250,9 @@ namespace Kirurobo
             // ウィンドウ制御用のインスタンス作成
             uniWin = new UniWinApi();
 
+            // 透過方式の指定
+            uniWin.TransparentType = transparentType;
+            
             // 自分のウィンドウを取得
             FindMyWindow();
 #endif
@@ -216,11 +269,15 @@ namespace Kirurobo
         {
             // マウスカーソル直下の色を取得するコルーチンを開始
             StartCoroutine(PickColorCoroutine());
+            
+            // エディタの場合、ウィンドウの準備ができるまで時間がかかるようなのでコルーチンで最大化などの初期状態を設定してみる
+            StartCoroutine((ApplyInitialStyle()));
         }
 
         void OnDestroy()
         {
-            if (uniWin != null) {
+            if (uniWin != null)
+            {
                 uniWin.Dispose();
             }
         }
@@ -235,15 +292,37 @@ namespace Kirurobo
                 UpdateWindow();
             }
 
-            // キー、マウス操作の下ウィンドウへの透過状態を更新
-            UpdateClickThrough();
-
             // マウスドラッグでウィンドウ移動
             DragMove();
 
+            // キー、マウス操作の下ウィンドウへの透過状態を更新
+            UpdateClickThrough();
+
+
             // ウィンドウ枠が復活している場合があるので監視するため、呼ぶ
-            if (uniWin != null) {
+            if (uniWin != null)
+            {
                 uniWin.Update();
+
+                // 最小化は外部要因で解除されがちなのでチェック
+                bool stateChanged = false;
+                if (_isMinimized != uniWin.IsMinimized)
+                {
+                    _isMinimized = uniWin.IsMinimized;
+                    stateChanged = true;
+                }
+
+                // 最大化もチェック
+                if (_isMaximized != uniWin.IsMaximized)
+                {
+                    _isMaximized = uniWin.IsMaximized;
+                    stateChanged = true;
+                }
+
+                if (stateChanged)
+                {
+                    StateChangedEvent();
+                }
             }
         }
 
@@ -272,11 +351,13 @@ namespace Kirurobo
                 return;
             }
 
+            //Debug.Log(Input.touchCount);
+
             // 最大化状態ならウィンドウ移動は行わないようにする
             bool isFullScreen = uniWin.IsMaximized;
 
-#if !UNITY_EDITOR
             // フルスクリーンならウィンドウ移動は行わない
+#if !UNITY_EDITOR
             //  エディタだと true になってしまうようなので、エディタ以外でのみ確認
             if (Screen.fullScreen) isFullScreen = true;
 #endif
@@ -286,25 +367,93 @@ namespace Kirurobo
                 return;
             }
 
-            // マウスドラッグでウィンドウ移動
-            if (Input.GetMouseButtonDown(0))
+            // マウスによるドラッグ開始の判定
+            if (Input.GetMouseButtonDown(0) && !Input.GetMouseButton(1) && !Input.GetMouseButton(2))
             {
-                lastMousePosition = UniWinApi.GetCursorPosition();
+                dragStartedPosition = Input.mousePosition;
                 isDragging = true;
+                wasUsingMouse = true;
+                //Debug.Log("Start mouse dragging");
             }
-            if (!Input.GetMouseButton(0))
+
+            bool touching = (activeFingerId >= 0);
+
+            int targetTouchIndex = -1;
+            if (activeFingerId < 0)
             {
+                // まだ追跡中の指が無かった場合、Beganとなるタッチがあればそれを追跡候補に挙げる
+                for (int i = 0; i < Input.touchCount; i++)
+                {
+                    if (Input.GetTouch(i).phase == TouchPhase.Began)
+                    {
+                        //Debug.Log("Touch began");
+                        //targetTouchIndex = i;
+                        firstTouch = Input.GetTouch(i);     // まだドラッグ開始とはせず、透過画素判定に回す。
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                // 追跡中の指がある場合
+                for (int i = 0; i < Input.touchCount; i++)
+                {
+                    if (activeFingerId == Input.GetTouch(i).fingerId)
+                    {
+                        targetTouchIndex = i;
+                        break;
+                    }
+                }
+            }
+
+            // タッチによるドラッグ開始の判定
+            if (targetTouchIndex >= 0 && !isDragging)
+            {
+                dragStartedPosition = Input.GetTouch(targetTouchIndex).position;
+                //activeFingerId = Input.GetTouch(targetTouchIndex).fingerId;
+                isDragging = true;
+                wasUsingMouse = false;
+                //Debug.Log("Start touch dragging");
+            }
+
+            // ドラッグ終了の判定
+            if (wasUsingMouse && !Input.GetMouseButton(0))
+            {
+                //Debug.Log("End mouse dragging");
+                activeFingerId = -1;
                 isDragging = false;
             }
+            else if (!wasUsingMouse && targetTouchIndex < 0)
+            {
+                //if (touching) Debug.Log("End touch dragging");
+                activeFingerId = -1;
+                isDragging = false;
+            }
+
+            // ドラッグ中ならば、ウィンドウ位置を更新
             if (isDragging)
             {
-                Vector2 mousePos = UniWinApi.GetCursorPosition();
-                Vector2 delta = mousePos - lastMousePosition;
-                lastMousePosition = mousePos;
+                Vector2 mousePos;
+                if (wasUsingMouse)
+                {
+                    mousePos = Input.mousePosition;
+                    Vector2 delta = mousePos - dragStartedPosition;
+                    delta.y = -delta.y;     // Y座標は反転
 
-                Vector2 windowPosition = uniWin.GetPosition();  // 現在のウィンドウ位置を取得
-                windowPosition += delta; // ウィンドウ位置に上下左右移動分を加える
-                uniWin.SetPosition(windowPosition);   // ウィンドウ位置を設定
+                    Vector2 windowPosition = uniWin.GetPosition();  // 現在のウィンドウ位置を取得
+                    windowPosition += delta; // ウィンドウ位置に上下左右移動分を加える
+                    uniWin.SetPosition(windowPosition);   // ウィンドウ位置を設定
+                }
+                else
+                {
+                    Touch touch = Input.GetTouch(targetTouchIndex);
+                    Vector2 delta = touch.position - dragStartedPosition;
+                    delta.y = -delta.y;     // Y座標は反転
+
+                    Vector2 windowPosition = uniWin.GetPosition();  // 現在のウィンドウ位置を取得
+                    windowPosition += delta; // ウィンドウ位置に上下左右移動分を加える
+                    uniWin.SetPosition(windowPosition);   // ウィンドウ位置を設定
+                }
             }
         }
 
@@ -313,9 +462,12 @@ namespace Kirurobo
         /// </summary>
         void UpdateClickThrough()
         {
+            // マウスカーソル非表示状態ならば透明画素上と同扱い
+            bool opaque = (onOpaquePixel && !UniWinApi.GetCursorVisible());
+
             if (_isClickThrough)
             {
-                if (onOpaquePixel)
+                if (opaque)
                 {
                     if (uniWin != null) uniWin.EnableClickThrough(false);
                     _isClickThrough = false;
@@ -323,7 +475,7 @@ namespace Kirurobo
             }
             else
             {
-                if (isTransparent && !onOpaquePixel && !isDragging)
+                if (isTransparent && !opaque && !isDragging)
                 {
                     if (uniWin != null) uniWin.EnableClickThrough(true);
                     _isClickThrough = true;
@@ -340,48 +492,97 @@ namespace Kirurobo
             while (Application.isPlaying)
             {
                 yield return new WaitForEndOfFrame();
-                MyPostRender(currentCamera);
+                UpdateOnOpaquePixel();
             }
             yield return null;
         }
 
         /// <summary>
-        /// マウス下の画素が透明かどうかを確認
+        /// マウス下の画素があるかどうかを確認
         /// </summary>
         /// <param name="cam"></param>
-        void MyPostRender(Camera cam)
+        private void UpdateOnOpaquePixel()
         {
-            // カメラが不明ならば何もしない
-            if (!cam) return;
-
-            Vector2 mousePos = Input.mousePosition;
-            Rect camRect = cam.pixelRect;
+            Vector2 mousePos;
+　          mousePos = Input.mousePosition;
 
             //// コルーチン & WaitForEndOfFrame ではなく、OnPostRenderで呼ぶならば、MSAAによって上下反転しないといけない？
             //if (QualitySettings.antiAliasing > 1) mousePos.y = camRect.height - mousePos.y;
 
-            if (camRect.Contains(mousePos))
+            // タッチ開始点が指定されれば、それを調べる
+            if (firstTouch != null)
             {
-                try
+                Touch touch = (Touch)firstTouch;
+                Vector2 pos = touch.position;
+
+                firstTouch = null;
+
+                if (GetOnOpaquePixel(pos))
                 {
-                    // Reference http://tsubakit1.hateblo.jp/entry/20131203/1386000440
-                    colorPickerTexture.ReadPixels(new Rect(mousePos, Vector2.one), 0, 0);
-                    Color color = colorPickerTexture.GetPixel(0, 0);
-                    pickedColor = color;
-                    onOpaquePixel = (color.a >= opaqueThreshold);  // αがしきい値以上ならば不透過とする
+                    onOpaquePixel = true;
+                    activeFingerId = touch.fingerId;
+                    return;
                 }
-                catch (System.Exception ex)
-                {
-                    // 稀に範囲外になってしまうよう
-                    Debug.LogError(ex.Message);
-                    onOpaquePixel = false;
-                }
+            }
+
+            // マウス座標を調べる
+            if (GetOnOpaquePixel(mousePos))
+            {
+                //Debug.Log("Mouse " + mousePos);
+                onOpaquePixel = true;
+                //activeFingerId = -1;    // タッチ追跡は解除
+                return;
             }
             else
             {
                 onOpaquePixel = false;
             }
         }
+
+        /// <summary>
+        /// 指定座標の画素が透明か否かを返す
+        /// </summary>
+        /// <param name="mousePos">座標[px]。必ず描画範囲内であること。</param>
+        /// <returns></returns>
+        private bool GetOnOpaquePixel(Vector2 mousePos)
+        {
+            float w = Screen.width;
+            float h = Screen.height;
+            //Debug.Log(w + ", " + h);
+
+            // 画面外であれば透明と同様
+            if (
+                mousePos.x < 0 || mousePos.x >= w
+                || mousePos.y < 0 || mousePos.y >= h
+                )
+            {
+                return false;
+            }
+
+            // 透過状態でなければ、範囲内なら不透過扱いとする
+            if (!_isTransparent) return true;
+
+            // LayeredWindowならばクリックスルーはOSに任せるため、ウィンドウ内ならtrueを返しておく
+            if (transparentType == UniWinApi.TransparentTypes.ColorKey) return true;
+
+            // 指定座標の描画結果を見て判断
+            try   // WaitForEndOfFrame のタイミングで実行すればtryは無くても大丈夫？
+            {
+                // Reference http://tsubakit1.hateblo.jp/entry/20131203/1386000440
+                colorPickerTexture.ReadPixels(new Rect(mousePos, Vector2.one), 0, 0);
+                //Color color = colorPickerTexture.GetPixel(0, 0);
+                Color color = colorPickerTexture.GetPixels32()[0];  // こちらの方が僅かに速い？
+                pickedColor = color;
+
+                return (color.a >= opaqueThreshold);  // αがしきい値以上ならば不透過とする
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogError(ex.Message);
+                return false;
+            }
+        }
+
 
         /// <summary>
         /// 自分のウィンドウハンドルを見つける
@@ -401,12 +602,37 @@ namespace Kirurobo
             // 見つかったウィンドウを利用開始
             uniWin.SetWindow(window);
 
-            // 初期状態を反映
-            SetTopmost(_isTopmost);
-            SetMaximized(_isMaximized);
-            SetMinimized(_isMinimized);
+            // // 初期設定を反映
+            // SetTopmost(_isTopmost);
+            // SetMaximized(_isMaximized);
+            // SetMinimized(_isMinimized);
+            SetTopmost(isInitiallyTopmost);
+            SetMaximized(isInitiallyMaximized);
+            SetMinimized(isInitiallyMinimized);
+            
             SetTransparent(_isTransparent);
             if (_enableFileDrop) BeginFileDrop();
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <returns></returns>
+        IEnumerator ApplyInitialStyle()
+        {
+            // ウインドウの準備ができるまで待つ
+            while (uniWin == null)
+            {
+                yield return null;
+            }
+
+            // さらに1フレーム待つ
+            yield return null;
+
+            // 初期値を設定
+            SetTopmost(isInitiallyTopmost);
+            SetMaximized(isInitiallyMaximized);
+            SetMinimized(isInitiallyMinimized);
         }
 
         /// <summary>
@@ -469,7 +695,14 @@ namespace Kirurobo
             if (isTransparent)
             {
                 currentCamera.clearFlags = CameraClearFlags.SolidColor;
-                currentCamera.backgroundColor = Color.clear;
+                if (uniWin.TransparentType == UniWinApi.TransparentTypes.ColorKey)
+                {
+                    currentCamera.backgroundColor = uniWin.ChromakeyColor;
+                }
+                else
+                {
+                    currentCamera.backgroundColor = Color.clear;
+                }
             }
             else
             {
@@ -481,20 +714,40 @@ namespace Kirurobo
         /// <summary>
         /// 透明化状態を切替
         /// </summary>
-        /// <param name="transparent"></param>
-        public void SetTransparent(bool transparent)
+        /// <param name="enabled"></param>
+        public void SetTransparent(bool enabled)
         {
             //if (_isTransparent == transparent) return;
 
-            _isTransparent = transparent;
-            SetCameraBackground(transparent);
+            _isTransparent = enabled;
+            SetCameraBackground(enabled);
 
             if (uniWin != null)
             {
-                uniWin.EnableTransparent(transparent);
+                uniWin.EnableTransparent(enabled);
             }
             UpdateClickThrough();
             StateChangedEvent();
+        }
+
+        /// <summary>
+        /// 透明化方式を設定
+        /// </summary>
+        /// <param name="type"></param>
+        public void SetTransparentType(UniWinApi.TransparentTypes type)
+        {
+            //Debug.Log(Screen.width + " : " + Screen.height);
+            //uniWin.SetPosition(Vector2.zero);
+
+            // 透過モード変更
+            uniWin.TransparentType = type;
+            transparentType = uniWin.TransparentType;
+            if (isTransparent)
+            {
+                // 透明化状態だったならば再度透明化を設定し直す
+                SetTransparent(false);
+                SetTransparent(true);
+            }
         }
 
         /// <summary>
@@ -607,7 +860,8 @@ namespace Kirurobo
         {
             if (Application.isPlaying)
             {
-                if (uniWin != null) {
+                if (uniWin != null)
+                {
                     uniWin.Dispose();
                 }
             }

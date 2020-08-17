@@ -10,7 +10,8 @@ namespace LookingGlass {
 
 		public Holoplay holoplay;
 
-		void OnRenderImage(RenderTexture src, RenderTexture dest) {
+		void OnRenderImage(RenderTexture src, RenderTexture dest) {				
+			holoplay.RenderQuilt();
 			Graphics.Blit(holoplay.quiltRT, dest, holoplay.lightfieldMat);
 			// Graphics.Blit(Holoplay.quiltRT, dest);
 		}

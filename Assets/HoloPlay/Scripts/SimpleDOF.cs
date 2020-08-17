@@ -40,9 +40,15 @@ namespace LookingGlass {
 			finalpassMat = new Material(Shader.Find("Holoplay/DOF/Final Pass"));
 		}
 
-		void Update() {
-			// make sure the Holoplay is capturing depth
-			holoplay.cam.depthTextureMode = DepthTextureMode.Depth;
+		void OnDisable() {
+			DestroyImmediate(passdepthMat);
+			DestroyImmediate(boxBlurMat);
+			DestroyImmediate(finalpassMat);
+		}
+
+		public void DoDOF(RenderTexture src, RenderTexture srcDepth) {
+			// // make sure the Holoplay is capturing depth
+			// holoplay.cam.depthTextureMode = DepthTextureMode.Depth;
 			// passing shader vars
 			Vector4 dofParams = new Vector4(start, dip, rise, end) * holoplay.size;
 			dofParams = new Vector4(
@@ -58,23 +64,38 @@ namespace LookingGlass {
 				Shader.EnableKeyword("_HORIZONTAL_ONLY");
 			else
 				Shader.DisableKeyword("_HORIZONTAL_ONLY");
-		}
 
-		void OnDisable() {
-			DestroyImmediate(passdepthMat);
-			DestroyImmediate(boxBlurMat);
-			DestroyImmediate(finalpassMat);
-		}
-
-		void OnRenderImage(RenderTexture src, RenderTexture dest) {
 			// make the temporary pass rendertextures
-			var fullres     = RenderTexture.GetTemporary(src.width, src.height, 0);
-			var fullresDest = RenderTexture.GetTemporary(src.width, src.height, 0);
+			var fullres = RenderTexture.GetTemporary(src.width, src.height, 0);
+			// var fullresDest = RenderTexture.GetTemporary(src.width, src.height, 0);
 			var blur1 = RenderTexture.GetTemporary(src.width / 2, src.height / 2, 0);
 			var blur2 = RenderTexture.GetTemporary(src.width / 3, src.height / 3, 0);
 			var blur3 = RenderTexture.GetTemporary(src.width / 4, src.height / 4, 0);
 
+			Shader.SetGlobalVector("ProjParams", new Vector4(
+				1f, 
+				holoplay.cam.nearClipPlane, 
+				holoplay.cam.farClipPlane, 
+				1f
+			));
+
+			var tile = new Vector4(
+                holoplay.quiltSettings.viewColumns,
+                holoplay.quiltSettings.viewRows,
+                holoplay.quiltSettings.numViews,
+                holoplay.quiltSettings.viewColumns * holoplay.quiltSettings.viewRows
+            );
+			var viewPortion = new Vector4(
+                holoplay.quiltSettings.viewPortionHorizontal,
+                holoplay.quiltSettings.viewPortionVertical
+            );
+			boxBlurMat.SetVector("tile", tile);
+            boxBlurMat.SetVector("viewPortion", viewPortion);
+			finalpassMat.SetVector("tile", tile);
+            finalpassMat.SetVector("viewPortion", viewPortion);
+
 			// passes: start with depth
+			passdepthMat.SetTexture("QuiltDepth", srcDepth);
 			Graphics.Blit(src, fullres, passdepthMat);
 
 			// blur 1
@@ -98,12 +119,12 @@ namespace LookingGlass {
 			finalpassMat.SetTexture("blur3", blur3);
 
 			// final blit for foreground
-			Graphics.Blit(fullres, fullresDest, finalpassMat);
-			Graphics.Blit(fullresDest, dest);
+			// Graphics.Blit(fullres, src);
+			Graphics.Blit(fullres, src, finalpassMat);
 
 			// disposing of stuff
 			RenderTexture.ReleaseTemporary(fullres);
-			RenderTexture.ReleaseTemporary(fullresDest);
+			// RenderTexture.ReleaseTemporary(fullresDest);
 			RenderTexture.ReleaseTemporary(blur1);
 			RenderTexture.ReleaseTemporary(blur2);
 			RenderTexture.ReleaseTemporary(blur3);

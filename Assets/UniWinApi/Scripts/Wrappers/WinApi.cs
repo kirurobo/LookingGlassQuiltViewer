@@ -86,7 +86,7 @@ namespace Kirurobo
         public static readonly uint LWA_ALPHA = 0x00000002;
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate bool EnumWindowsDelegate(IntPtr hWnd, IntPtr lParam);
+        public delegate bool EnumWindowsDelegate(IntPtr hWnd, long lParam);
 
         [StructLayout(LayoutKind.Sequential, Pack = 4)]
         public struct RECT
@@ -122,20 +122,24 @@ namespace Kirurobo
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool EnumWindows(EnumWindowsDelegate lpEnumFunc, IntPtr lParam);
 
+        [DllImport("user32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool EnumChildWindows(IntPtr hWnd, EnumWindowsDelegate lpEnumFunc, IntPtr lParam);
+
         [DllImport("user32.dll")]
         public static extern bool IsWindow(IntPtr hWnd);
 
         [DllImport("user32.dll")]
         public static extern bool IsWindowVisible(IntPtr hWnd);
 
-        [DllImport("user32.dll", CharSet = CharSet.Auto, CallingConvention = CallingConvention.Cdecl)]
+        [DllImport("user32.dll", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.Cdecl)]
         public static extern int GetWindowText(IntPtr hWnd, [MarshalAs(UnmanagedType.LPStr)]StringBuilder lpString, int nMaxCount);
 
-        [DllImport("user32.dll", CharSet = CharSet.Auto, CallingConvention = CallingConvention.Cdecl)]
+        [DllImport("user32.dll", CharSet = CharSet.Ansi, CallingConvention = CallingConvention.Cdecl)]
         public static extern int GetClassName(IntPtr hWnd, [MarshalAs(UnmanagedType.LPStr)]StringBuilder lpClassName, int nMaxCount);
 
         [DllImport("user32.dll")]
-        public static extern int GetWindowThreadProcessId(IntPtr hWnd, out IntPtr lpdwProcessId);
+        public static extern int GetWindowThreadProcessId(IntPtr hWnd, out long lpdwProcessId);
 
         [DllImport("user32.dll")]
         public static extern IntPtr FindWindow(string lpszClass, string lpszTitle);
@@ -216,6 +220,25 @@ namespace Kirurobo
         public struct POINT
         {
             public int x, y;
+
+            public override string ToString()
+            {
+                return "(" + x + "," + y + ")";
+            }
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct CURSORINFO
+        {
+            public int cbSize;
+            public int flags;       // 0:Hidden, 1:Showing, 2:Suppressed(Window8-)
+            public IntPtr hCursor;
+            public POINT ptScreenPos;
+
+            public override string ToString()
+            {
+                return string.Format("Flags:{0}, HCursor:{1}, Point:{2}", flags, hCursor, ptScreenPos.ToString());
+            }
         }
 
         [DllImport("user32.dll")]
@@ -223,6 +246,9 @@ namespace Kirurobo
 
         [DllImport("user32.dll")]
         public static extern bool SetCursorPos(int x, int y);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        public static extern bool GetCursorInfo(ref CURSORINFO pcursorinfo);
 
         [DllImport("user32.dll")]
         public static extern uint mouse_event(ulong dwFlags, int dx, int dy, ulong dwData, IntPtr dwExtraInfo);

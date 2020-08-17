@@ -16,11 +16,15 @@ namespace LookingGlass {
         static BindingFlags bindingFlags = 
             System.Reflection.BindingFlags.Instance | 
             System.Reflection.BindingFlags.NonPublic;
-        static int tabSize = 22 - 5; //this makes sense i promise
+#if UNITY_2019_1_OR_NEWER
+        static int tabSize = 21;
+#else
+        static int tabSize = 17; //this makes sense i promise
+#endif
 		static Type gameViewWindowType = typeof(Editor).Assembly.GetType("UnityEditor.GameView");
         static MethodInfo getGroup;
 		static EditorWindow gameViewWindow;
-#if UNITY_EDITOR_OSX
+#if UNITY_EDITOR_OSX || UNITY_EDITOR_LINUX
 		static int windowInitialized = 2; // a countdown, sort of
 		public const string togglePreviewShortcut = "Toggle Preview ⌘E";
 #else
@@ -38,17 +42,30 @@ namespace LookingGlass {
 			EditorSceneManager.sceneOpened += RecheckDisplayTarget;
 			// close open windows if there isn't a looking glass
 			EditorApplication.update += CloseExtraHoloplayWindows;
+// #if UNITY_2018_1_OR_NEWER			
+// 			EditorApplication.quitting += Quit;
+// #endif
 		}
+
+// 		// make sure that HoloPlay Core got teared down before the editor closed
+// 		public static void Quit(){
+// #if UNITY_2018_1_OR_NEWER	
+// 			Debug.Log("quitting editor and tear down");		
+// 			// EditorApplication.quitting -= Quit;
+// 			PluginCore.TearDown();
+// #endif
+// 		}
 
 		// for when the user switches scenes, update preview if it's open
 		static int recheckDelay;
 		public static void RecheckDisplayTarget(Scene openScene, OpenSceneMode openSceneMode){
+			
 			recheckDelay = 1;
 			EditorApplication.update += RecheckDisplayTargetDelayed;
 		}
 
 		// needs to be delayed because otherwise stuff isn't done setting up
-		public static void RecheckDisplayTargetDelayed() {
+		public static void RecheckDisplayTargetDelayed() {			
 			if (recheckDelay-- > 0) return;
 			HandlePreview(false);
 			EditorApplication.update -= RecheckDisplayTargetDelayed;
@@ -66,9 +83,10 @@ namespace LookingGlass {
 
 		public static void HandlePreview(bool toggling = true) {
 			// set standalone resolution
-			Plugin.PopulateLKGDisplays();
-			// calibration loading happens in populate displays
-			// Calibration.LoadCalibrations();
+            // PluginCore.GetLoadResults();
+            if(Holoplay.Instance != null) Holoplay.Instance.ReloadCalibration();
+			else PluginCore.GetLoadResults();
+
 			// close the window if its open
 			var currentWindows = Resources.FindObjectsOfTypeAll(gameViewWindowType);
 			bool windowWasOpen = false;
@@ -97,15 +115,16 @@ namespace LookingGlass {
 			var hps = GameObject.FindObjectsOfType<Holoplay>();
 			// open up a preview in the looking glass even if no holoplays found
 			if (hps.Length == 0) {
-                SetupPreviewWindow(new Calibration(Plugin.GetLKGcalIndex(0)), 0, 0);
+                SetupPreviewWindow(new Calibration(0), 0, 0);
 			}
 			foreach (var hp in hps) {
-				SetupPreviewWindow(hp.cal, hp.targetLKG, hp.targetDisplay);
+                // Debug.Log(string.Format("set up preview window for lkg index {0}, target lkg {1}, target display {2}, {3}", hp.cal.index, hp.targetLKG, hp.targetDisplay, hp.name));
+                SetupPreviewWindow(hp.cal, hp.targetLKG, hp.targetDisplay);
 			}
 		}
 
 		static void SetupPreviewWindow(Calibration cal, int targetLKG, int targetDisplay) {
-            bool isMac = Application.platform == RuntimePlatform.OSXEditor;
+            bool isMac = Application.platform == RuntimePlatform.OSXEditor || Application.platform == RuntimePlatform.LinuxEditor;
 			if (UnityEditor.PlayerSettings.defaultScreenWidth != cal.screenWidth)
 				UnityEditor.PlayerSettings.defaultScreenWidth = cal.screenWidth;
 			if (UnityEditor.PlayerSettings.defaultScreenHeight != cal.screenHeight)
@@ -118,6 +137,7 @@ namespace LookingGlass {
 				var showWithModeInfo = gameViewWindowType.GetMethod("ShowWithMode", bindingFlags);
 				showWithModeInfo.Invoke(gameViewWindow, new [] { Enum.ToObject(showModeType, 1) });
 			} else {
+				
 				if (windowInitialized == 2) {
 					EditorApplication.update += UpdateWindowPos;
 					windowInitialized = 1;
@@ -127,8 +147,9 @@ namespace LookingGlass {
 			// set window size and position
 			gameViewWindow.maxSize = new Vector2(cal.screenWidth, cal.screenHeight + tabSize);
 			gameViewWindow.minSize = gameViewWindow.maxSize;
-			int xpos = Plugin.GetLKGxpos(targetLKG);
-			int ypos = Plugin.GetLKGypos(targetLKG);
+			int xpos = CalibrationManager.GetCalibration(targetLKG).xpos;
+			int ypos = CalibrationManager.GetCalibration(targetLKG).ypos;
+			// Debug.Log("set up preview window on target lkg:" + targetDisplay  + " (" + xpos + "," + ypos);
 			// Debug.Log("targetLKG:" + targetLKG + " x:" + xpos + " y:" + ypos);
 			if (manualPreviewSettings != null && manualPreviewSettings.manualPosition) {
 				xpos = manualPreviewSettings.position.x;
@@ -140,14 +161,19 @@ namespace LookingGlass {
 			SetZoom(gameViewWindow);
 			SetResolution(gameViewWindow);
 			// set display number
+#if UNITY_2019_3_OR_NEWER
+			gameViewWindowType.GetMethod("set_targetDisplay", bindingFlags).Invoke(gameViewWindow, new object[] {targetDisplay});
+#else
 			var displayNum = gameViewWindowType.GetField("m_TargetDisplay", bindingFlags);
 			displayNum.SetValue(gameViewWindow, targetDisplay);
+#endif
 		}
 
 		static void CloseExtraHoloplayWindows() {
-			var currentWindows = Resources.FindObjectsOfTypeAll(gameViewWindowType);
-			Plugin.PopulateLKGDisplays();
-			if (Plugin.GetLKGcount() < 1) {
+			var currentWindows = Resources.FindObjectsOfTypeAll(gameViewWindowType); 
+            PluginCore.GetLoadResults();
+
+			if (manualPreviewSettings != null && CalibrationManager.GetCalibrationCount() < 1) {
 				foreach (EditorWindow w in currentWindows) {
 					if (w.name == "Holoplay") {
 						w.Close();
@@ -160,19 +186,23 @@ namespace LookingGlass {
 
 		// this won't work for multiple monitors
 		// but multi-display doesn't work on mac anyway
+
 		static void UpdateWindowPos() {
 			if (windowInitialized > 0) {
 				windowInitialized--;
 			} else {
-				int xpos = Plugin.GetLKGxpos(0);
-				int ypos = Plugin.GetLKGypos(0);
+				int xpos = CalibrationManager.GetCalibration(0).xpos;
+				int ypos = CalibrationManager.GetCalibration(0).ypos;
 				if (manualPreviewSettings != null && manualPreviewSettings.manualPosition) {
 					xpos = manualPreviewSettings.position.x;
 					ypos = manualPreviewSettings.position.y;
 				}
+#if UNITY_2019_3_OR_NEWER && (UNITY_EDITOR_OSX || UNITY_EDITOR_LINUX)
+#else
 				gameViewWindow.position = new Rect(
-					xpos, ypos - tabSize + 5, // plus 5, don't know why, works
+					xpos, ypos - 22,
 					gameViewWindow.maxSize.x, gameViewWindow.maxSize.y);
+#endif
 				EditorApplication.update -= UpdateWindowPos;
 			}
 		}

@@ -43,8 +43,8 @@ namespace LookingGlass {
             public void Setup() {
                 viewWidth = quiltWidth / viewColumns;
                 viewHeight = quiltHeight / viewRows;
-                viewPortionHorizontal = (float)viewColumns * viewWidth / quiltWidth;
-                viewPortionVertical = (float)viewRows * viewHeight / quiltHeight;
+                viewPortionHorizontal = (float)viewColumns * viewWidth / (float)quiltWidth;
+                viewPortionVertical = (float)viewRows * viewHeight / (float)quiltHeight;
                 paddingHorizontal = quiltWidth - viewColumns * viewWidth;
                 paddingVertical = quiltHeight - viewRows * viewHeight;
             }
@@ -56,6 +56,7 @@ namespace LookingGlass {
             Standard = 1, 
             HiRes = 2, 
             UltraHi = 3,
+            Maximum = 4,
             Automatic = -1,
             Custom = -2,
         }
@@ -66,13 +67,20 @@ namespace LookingGlass {
             new Settings(2048, 2048, 4, 8, 32), // standard
             new Settings(4096, 4096, 5, 9, 45), // hi res
             new Settings(7680, 6400, 6, 8, 48), // ultra hi
+            new Settings(8192, 8192, 5, 9, 45), // maximum
         };
 
         // functions
-        public static Settings GetPreset(Preset preset) {
+        public static Settings GetPreset(Preset preset, Calibration cal) {
             if (preset != Preset.Automatic) return presets[(int)preset];
-            if (QualitySettings.lodBias > 2f) return presets[(int)Preset.UltraHi];
-            if (QualitySettings.lodBias > 1f) return presets[(int)Preset.HiRes];
+            // if (QualitySettings.lodBias > 2f) return presets[(int)Preset.UltraHi];
+            if (QualitySettings.lodBias > 1f){
+                // making an exception here for higher res systems
+                if (cal.screenWidth > 4000 || cal.screenHeight > 2000) {
+                    return presets[(int)Preset.Maximum];
+                }
+                return presets[(int)Preset.HiRes];
+            }
             if (QualitySettings.lodBias > 0.5f) return presets[(int)Preset.Standard];
             return presets[(int)Preset.ExtraLow];
         }
