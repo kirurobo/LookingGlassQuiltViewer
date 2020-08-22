@@ -463,7 +463,7 @@ namespace Kirurobo
         void UpdateClickThrough()
         {
             // マウスカーソル非表示状態ならば透明画素上と同扱い
-            bool opaque = (onOpaquePixel && !UniWinApi.GetCursorVisible());
+            bool opaque = (onOpaquePixel && ((uniWin != null) && !UniWinApi.GetCursorVisible()));
 
             if (_isClickThrough)
             {

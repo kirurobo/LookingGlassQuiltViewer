@@ -4,16 +4,16 @@
 QualitySettings:
   m_ObjectHideFlags: 0
   serializedVersion: 5
-  m_CurrentQuality: 4
+  m_CurrentQuality: 5
   m_QualitySettings:
   - serializedVersion: 2
     name: Very Low
     pixelLightCount: 0
-    shadows: 1
+    shadows: 0
     shadowResolution: 0
-    shadowProjection: 0
+    shadowProjection: 1
     shadowCascades: 1
-    shadowDistance: 5000
+    shadowDistance: 15
     shadowNearPlaneOffset: 3
     shadowCascade2Split: 0.33333334
     shadowCascade4Split: {x: 0.06666667, y: 0.2, z: 0.46666667}
@@ -37,7 +37,7 @@ QualitySettings:
     streamingMipmapsMaxFileIORequests: 1024
     particleRaycastBudget: 4
     asyncUploadTimeSlice: 2
-    asyncUploadBufferSize: 4
+    asyncUploadBufferSize: 16
     asyncUploadPersistentBuffer: 1
     resolutionScalingFixedDPIFactor: 1
     customRenderPipeline: {fileID: 0}
@@ -45,11 +45,11 @@ QualitySettings:
   - serializedVersion: 2
     name: Low
     pixelLightCount: 0
-    shadows: 1
+    shadows: 0
     shadowResolution: 0
-    shadowProjection: 0
+    shadowProjection: 1
     shadowCascades: 1
-    shadowDistance: 5000
+    shadowDistance: 20
     shadowNearPlaneOffset: 3
     shadowCascade2Split: 0.33333334
     shadowCascade4Split: {x: 0.06666667, y: 0.2, z: 0.46666667}
@@ -73,7 +73,7 @@ QualitySettings:
     streamingMipmapsMaxFileIORequests: 1024
     particleRaycastBudget: 16
     asyncUploadTimeSlice: 2
-    asyncUploadBufferSize: 4
+    asyncUploadBufferSize: 16
     asyncUploadPersistentBuffer: 1
     resolutionScalingFixedDPIFactor: 1
     customRenderPipeline: {fileID: 0}
@@ -83,9 +83,9 @@ QualitySettings:
     pixelLightCount: 1
     shadows: 1
     shadowResolution: 0
-    shadowProjection: 0
+    shadowProjection: 1
     shadowCascades: 1
-    shadowDistance: 5000
+    shadowDistance: 20
     shadowNearPlaneOffset: 3
     shadowCascade2Split: 0.33333334
     shadowCascade4Split: {x: 0.06666667, y: 0.2, z: 0.46666667}
@@ -98,7 +98,7 @@ QualitySettings:
     softVegetation: 0
     realtimeReflectionProbes: 0
     billboardsFaceCameraPosition: 0
-    vSyncCount: 0
+    vSyncCount: 1
     lodBias: 0.7
     maximumLODLevel: 0
     streamingMipmapsActive: 0
@@ -109,7 +109,7 @@ QualitySettings:
     streamingMipmapsMaxFileIORequests: 1024
     particleRaycastBudget: 64
     asyncUploadTimeSlice: 2
-    asyncUploadBufferSize: 4
+    asyncUploadBufferSize: 16
     asyncUploadPersistentBuffer: 1
     resolutionScalingFixedDPIFactor: 1
     customRenderPipeline: {fileID: 0}
@@ -117,11 +117,11 @@ QualitySettings:
   - serializedVersion: 2
     name: High
     pixelLightCount: 2
-    shadows: 1
+    shadows: 2
     shadowResolution: 1
-    shadowProjection: 0
-    shadowCascades: 1
-    shadowDistance: 5000
+    shadowProjection: 1
+    shadowCascades: 2
+    shadowDistance: 40
     shadowNearPlaneOffset: 3
     shadowCascade2Split: 0.33333334
     shadowCascade4Split: {x: 0.06666667, y: 0.2, z: 0.46666667}
@@ -129,12 +129,12 @@ QualitySettings:
     skinWeights: 2
     textureQuality: 0
     anisotropicTextures: 1
-    antiAliasing: 2
+    antiAliasing: 0
     softParticles: 0
     softVegetation: 1
     realtimeReflectionProbes: 1
     billboardsFaceCameraPosition: 1
-    vSyncCount: 0
+    vSyncCount: 1
     lodBias: 1
     maximumLODLevel: 0
     streamingMipmapsActive: 0
@@ -145,7 +145,7 @@ QualitySettings:
     streamingMipmapsMaxFileIORequests: 1024
     particleRaycastBudget: 256
     asyncUploadTimeSlice: 2
-    asyncUploadBufferSize: 4
+    asyncUploadBufferSize: 16
     asyncUploadPersistentBuffer: 1
     resolutionScalingFixedDPIFactor: 1
     customRenderPipeline: {fileID: 0}
@@ -153,24 +153,24 @@ QualitySettings:
   - serializedVersion: 2
     name: Very High
     pixelLightCount: 3
-    shadows: 1
+    shadows: 2
     shadowResolution: 2
-    shadowProjection: 0
-    shadowCascades: 1
-    shadowDistance: 5000
+    shadowProjection: 1
+    shadowCascades: 2
+    shadowDistance: 70
     shadowNearPlaneOffset: 3
     shadowCascade2Split: 0.33333334
     shadowCascade4Split: {x: 0.06666667, y: 0.2, z: 0.46666667}
     shadowmaskMode: 1
     skinWeights: 4
     textureQuality: 0
-    anisotropicTextures: 1
-    antiAliasing: 4
+    anisotropicTextures: 2
+    antiAliasing: 2
     softParticles: 1
     softVegetation: 1
     realtimeReflectionProbes: 1
     billboardsFaceCameraPosition: 1
-    vSyncCount: 0
+    vSyncCount: 1
     lodBias: 1.5
     maximumLODLevel: 0
     streamingMipmapsActive: 0
@@ -181,7 +181,7 @@ QualitySettings:
     streamingMipmapsMaxFileIORequests: 1024
     particleRaycastBudget: 1024
     asyncUploadTimeSlice: 2
-    asyncUploadBufferSize: 4
+    asyncUploadBufferSize: 16
     asyncUploadPersistentBuffer: 1
     resolutionScalingFixedDPIFactor: 1
     customRenderPipeline: {fileID: 0}
@@ -189,24 +189,24 @@ QualitySettings:
   - serializedVersion: 2
     name: Ultra
     pixelLightCount: 4
-    shadows: 1
+    shadows: 2
     shadowResolution: 2
-    shadowProjection: 0
-    shadowCascades: 1
-    shadowDistance: 5000
+    shadowProjection: 1
+    shadowCascades: 4
+    shadowDistance: 150
     shadowNearPlaneOffset: 3
     shadowCascade2Split: 0.33333334
     shadowCascade4Split: {x: 0.06666667, y: 0.2, z: 0.46666667}
     shadowmaskMode: 1
-    skinWeights: 4
+    skinWeights: 255
     textureQuality: 0
-    anisotropicTextures: 1
-    antiAliasing: 4
+    anisotropicTextures: 2
+    antiAliasing: 2
     softParticles: 1
     softVegetation: 1
     realtimeReflectionProbes: 1
     billboardsFaceCameraPosition: 1
-    vSyncCount: 0
+    vSyncCount: 1
     lodBias: 2
     maximumLODLevel: 0
     streamingMipmapsActive: 0
@@ -217,21 +217,19 @@ QualitySettings:
     streamingMipmapsMaxFileIORequests: 1024
     particleRaycastBudget: 4096
     asyncUploadTimeSlice: 2
-    asyncUploadBufferSize: 4
+    asyncUploadBufferSize: 16
     asyncUploadPersistentBuffer: 1
     resolutionScalingFixedDPIFactor: 1
     customRenderPipeline: {fileID: 0}
     excludedTargetPlatforms: []
   m_PerPlatformDefaultQuality:
     Android: 2
-    Nintendo 3DS: 5
+    Lumin: 5
     Nintendo Switch: 5
     PS4: 5
-    PSP2: 2
+    Stadia: 5
     Standalone: 5
-    Tizen: 2
     WebGL: 3
-    WiiU: 5
     Windows Store Apps: 5
     XboxOne: 5
     iPhone: 2
