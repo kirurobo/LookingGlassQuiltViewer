@@ -7,6 +7,8 @@ using Kirurobo;
 using LookingGlass;
 using SFB;
 using UnityEngine.Video;
+using UnityEngine.XR;
+using UnityEngine.InputSystem;
 
 public class QuiltFileLoader : MonoBehaviour
 {
@@ -17,6 +19,8 @@ public class QuiltFileLoader : MonoBehaviour
     Holoplay holoplay;
     Quilt.Settings defaultTiling;
 
+    HoloPlayButtonListener buttonListener;      // DirectInputによりバックグラウンドでもボタン取得
+
     public TMPro.TextMeshPro messageText;       // ファイル名等表示用のText
     public GameObject prevIndicator;            // 前のファイルへ移動時に表示するオブジェクト
     public GameObject nextIndicator;            // 次のファイルへ移動時に表示するオブジェクト
@@ -24,7 +28,7 @@ public class QuiltFileLoader : MonoBehaviour
     public int frameRateForStill = 10;          // 静止画表示時のフレームレート指定 [fps]
     public int frameRateForMovie = 60;          // 動画再生時のフレームレート指定 [fps]
 
-    static readonly string[] imageExtensions = { "png", "jpg", "jpeg" };
+    static readonly string[] imageExtensions = { "png", "jpg", "jpeg", "jfif" };
     static readonly string[] movieExtensions = { "mp4", "webm", "mov", "avi" };
 
 
@@ -92,13 +96,54 @@ public class QuiltFileLoader : MonoBehaviour
         // メッセージ欄を最初に消去
         ShowMessage("");
 
+        // バックグラウンドでのボタン管理
+        SetupButtonListener();
+
         // カーソルを表示するか否かを記憶
         isCursorVisible = Cursor.visible;
-
     }
 
+    private void SetupButtonListener()
+    {
+        buttonListener = new HoloPlayButtonListener();
+        //Debug.Log("Joisticks : " + buttonListener.GetDeviceCount());
+
+        buttonListener.OnkeyDown += ButtonListener_OnkeyDown;
+    }
+
+    /// <summary>
+    /// Looking Glass のボタンが押されたときに呼ばれる
+    /// </summary>
+    /// <param name="button"></param>
+    private void ButtonListener_OnkeyDown(HoloPlayButtonListener.HoloPlayButton button)
+    {
+        if (isLoading) return;      // ローディング中なら処理はしない
+
+        switch (button)
+        {
+            case HoloPlayButtonListener.HoloPlayButton.Left:
+                ShowMessage("");                // ファイル名が表示されていれば消す
+                LoadFile(GetNextFile(-1));      // 前のファイルを開く
+                break;
+
+            case HoloPlayButtonListener.HoloPlayButton.Right:
+                ShowMessage("");                // ファイル名が表示されていれば消す
+                LoadFile(GetNextFile(1));       // 次のファイルを開く
+                break;
+
+            case HoloPlayButtonListener.HoloPlayButton.Circle:
+                ShowFilename(currentFile);      // ファイル名を表示
+                break;
+        }
+    }
+
+    /// <summary>
+    /// 毎フレームの処理
+    /// </summary>
     void Update()
     {
+        buttonListener.Update();    // バックグラウンドでもボタン状態取得
+
         // 操作できるのはファイル読み込み待ちでないときだけ
         if (!isLoading)
         {
@@ -125,35 +170,60 @@ public class QuiltFileLoader : MonoBehaviour
             }
 
             // 前の画像
-            if (ButtonManager.GetButtonDown(ButtonType.LEFT) || Input.GetKeyDown(KeyCode.LeftArrow))
+            if (Input.GetKeyDown(KeyCode.LeftArrow))
             {
                 ShowMessage("");    // ファイル名が表示されていれば消す
                 LoadFile(GetNextFile(-1));
             }
 
             // 次の画像
-            if (ButtonManager.GetButtonDown(ButtonType.RIGHT) || Input.GetKeyDown(KeyCode.RightArrow))
+            if (Input.GetKeyDown(KeyCode.RightArrow))
             {
                 ShowMessage("");    // ファイル名が表示されていれば消す
                 LoadFile(GetNextFile(1));
             }
 
             // 開かれているファイル名を表示
-            if (ButtonManager.GetButtonDown(ButtonType.CIRCLE))
+            if (Input.GetKeyDown(KeyCode.UpArrow))
             {
                 ShowFilename(currentFile);
             }
+
+            //// 前の画像
+            //if (ButtonManager.GetButtonDown(ButtonType.LEFT) || Input.GetKeyDown(KeyCode.LeftArrow))
+            //{
+            //    ShowMessage("");    // ファイル名が表示されていれば消す
+            //    LoadFile(GetNextFile(-1));
+            //}
+
+            //// 次の画像
+            //if (ButtonManager.GetButtonDown(ButtonType.RIGHT) || Input.GetKeyDown(KeyCode.RightArrow))
+            //{
+            //    ShowMessage("");    // ファイル名が表示されていれば消す
+            //    LoadFile(GetNextFile(1));
+            //}
+
+            //// 開かれているファイル名を表示
+            //if (ButtonManager.GetButtonDown(ButtonType.CIRCLE))
+            //{
+            //    ShowFilename(currentFile);
+            //}
         }
 
         // 左ボタンが押されていることを表示
-        if (prevIndicator) prevIndicator.SetActive((ButtonManager.GetButton(ButtonType.LEFT) || Input.GetKey(KeyCode.LeftArrow)));
+        if (prevIndicator) prevIndicator.SetActive(Input.GetKey(KeyCode.LeftArrow) || buttonListener.GetKey(HoloPlayButtonListener.HoloPlayButton.Left));
 
         // 右ボタンが押されていることを表示
-        if (nextIndicator) nextIndicator.SetActive((ButtonManager.GetButton(ButtonType.RIGHT) || Input.GetKey(KeyCode.RightArrow)));
+        if (nextIndicator) nextIndicator.SetActive(Input.GetKey(KeyCode.RightArrow) || buttonListener.GetKey(HoloPlayButtonListener.HoloPlayButton.Right));
+
+        //// 左ボタンが押されていることを表示
+        //if (prevIndicator) prevIndicator.SetActive((ButtonManager.GetButton(ButtonType.LEFT) || Input.GetKey(KeyCode.LeftArrow)));
+
+        //// 右ボタンが押されていることを表示
+        //if (nextIndicator) nextIndicator.SetActive((ButtonManager.GetButton(ButtonType.RIGHT) || Input.GetKey(KeyCode.RightArrow)));
 
         //UpdateVideo();
         UpdateMessage();
-        //UpdateIndicator();
     }
     
     /// <summary>
