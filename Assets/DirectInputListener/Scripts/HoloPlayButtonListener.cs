@@ -1,8 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
+using UnityEngine;
 
 #if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
 using SharpDX.DirectInput;
+#else
+using UnityEngine.InputSystem;
 #endif
 
 namespace Kirurobo
@@ -40,6 +43,7 @@ namespace Kirurobo
         /// </summary>
         private List<SharpDX.DirectInput.Joystick> holoplayDevices = new List<SharpDX.DirectInput.Joystick>();
 
+
         /// <summary>
         /// 指定ボタンが押されているか判定
         /// </summary>
@@ -50,6 +54,21 @@ namespace Kirurobo
         {
             return (state.Buttons[(int)button]);
         }
+
+        /// <summary>
+        /// 指定ボタンが押されているか判定
+        /// </summary>
+        /// <param name="state"></param>
+        /// <param name="button"></param>
+        /// <returns></returns>
+        private bool IsPressed(JoystickState state, HoloPlayButton button)
+        {
+            return (state.Buttons[(int)button]);
+        }
+
+#else
+        private int holoplayDevicesCount = 0;
+           
 #endif
 
         /// <summary>
@@ -67,7 +86,11 @@ namespace Kirurobo
         /// <returns></returns>
         public int GetDeviceCount()
         {
+#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
             return holoplayDevices.Count;
+#else
+            return holoplayDevicesCount;
+#endif
         }
 
         /// <summary>
@@ -92,6 +115,16 @@ namespace Kirurobo
                     }
                 }
             }
+#else
+            var joystickNames = Input.GetJoystickNames();
+            for (int i = 0; i < joystickNames.Length; i++)
+            {
+                if (joystickNames[i].ToLower().Contains("holoplay"))
+                {
+                    holoplayDevicesCount++;
+                }
+            }
+#endif
 
             // ボタン状態を初期化
             foreach (HoloPlayButton button in Enum.GetValues(typeof(HoloPlayButton)))
@@ -99,7 +132,6 @@ namespace Kirurobo
                 currentState[button] = false;
                 lastState[button] = false;
             }
-#endif
         }
 
         /// <summary>
@@ -116,11 +148,11 @@ namespace Kirurobo
         /// </summary>
         private void UpdateButtonState()
         {
+#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
             foreach (HoloPlayButton button in Enum.GetValues(typeof(HoloPlayButton)))
             {
                 currentState[button] = false;
             }
-
             foreach (var device in holoplayDevices)
             {
                 // キャプチャ開始
@@ -142,6 +174,7 @@ namespace Kirurobo
                     if (IsPressed(state, button)) currentState[button] = true;
                 }
             }
+#endif
         }
 
         /// <summary>
