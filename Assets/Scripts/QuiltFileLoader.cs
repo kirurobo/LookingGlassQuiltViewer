@@ -9,6 +9,8 @@ using SFB;
 using UnityEngine.Video;
 using UnityEngine.XR;
 using UnityEngine.InputSystem;
+using System.Linq;
+using System.Text.RegularExpressions;
 
 public class QuiltFileLoader : MonoBehaviour
 {
@@ -54,10 +56,13 @@ public class QuiltFileLoader : MonoBehaviour
 
     HoloPlayButtonListener buttonListener;      // DirectInputによりバックグラウンドでもボタン取得
 
-    public TMPro.TextMeshPro messageText;       // メッセージ表示用のText
-    public TMPro.TextMeshPro fileInfoText;      // ファイル名等表示用のText
+    public TextMesh messageText;                // メッセージ表示用のText
+    public TextMesh fileInfoText;               // ファイル名等表示用のText
     public GameObject prevIndicator;            // 前のファイルへ移動時に表示するオブジェクト
     public GameObject nextIndicator;            // 次のファイルへ移動時に表示するオブジェクト
+
+    private TextMesh messageTextShadow;         // メッセージ表示用のTextの影
+    private TextMesh fileInfoTextShadow;        // ファイル名等表示用のTextの影
 
     public int frameRateForStill = 10;          // 静止画表示時のフレームレート指定 [fps]
     public int frameRateForMovie = 60;          // 動画再生時のフレームレート指定 [fps]
@@ -133,6 +138,29 @@ public class QuiltFileLoader : MonoBehaviour
         PlayerPrefs.SetString(PrefItems.StartupFilePath, currentFile);
     }
 
+    /// <summary>
+    /// TextMeshを複製して影にする
+    /// </summary>
+    private void InitializeTextShadow()
+    {
+        if (messageText)
+        {
+            messageTextShadow = GameObject.Instantiate<TextMesh>(messageText);
+            messageTextShadow.transform.parent = messageText.transform;
+            messageTextShadow.transform.localPosition += new Vector3(0.05f, -0.04f, 0.01f);
+            messageTextShadow.color = Color.black;
+            messageText.GetComponent<MeshRenderer>().sortingOrder += 1;
+        }
+        if (fileInfoText)
+        {
+            fileInfoTextShadow = GameObject.Instantiate<TextMesh>(fileInfoText);
+            fileInfoTextShadow.transform.parent = fileInfoText.transform;
+            fileInfoTextShadow.transform.localPosition += new Vector3(0.05f, -0.04f, 0.01f);
+            fileInfoTextShadow.color = Color.black;
+            fileInfoText.GetComponent<MeshRenderer>().sortingOrder += 1;
+        }
+    }
+
     // Use this for initialization
     void Start()
     {
@@ -163,6 +191,9 @@ public class QuiltFileLoader : MonoBehaviour
         // 操作に対する表示は非表示にしておく
         if (nextIndicator) nextIndicator.SetActive(false);
         if (prevIndicator) prevIndicator.SetActive(false);
+
+        // TextMeshがあれば複製して影とする
+        InitializeTextShadow();
 
         // サンプルの画像を読み込み
         LoadFile(Path.Combine(Application.streamingAssetsPath, "startup.png"));
@@ -343,12 +374,8 @@ public class QuiltFileLoader : MonoBehaviour
     {
         if (videoPlayer && videoPlayer.isPlaying && texture)
         {
-            // 動画再生中ならば、内容を Texture2D として複製。たぶん重い。
-            RenderTexture currentRenderTexture = RenderTexture.active;
-            RenderTexture.active = videoRenderTexture;
-            texture.ReadPixels(new Rect(0, 0, texture.width, texture.height), 0, 0);
-            texture.Apply();
-            RenderTexture.active = currentRenderTexture;
+            // 強制的に描画？
+            holoplay.RenderQuilt();
         }
     }
 
@@ -361,7 +388,11 @@ public class QuiltFileLoader : MonoBehaviour
         {
             if (messageClearTime < Time.time)
             {
-                if (messageText) messageText.text = "";
+                if (messageText)
+                {
+                    messageText.text = "";
+                    messageTextShadow.text = "";
+                }
                 messageClearTime = 0;
             }
         }
@@ -377,6 +408,7 @@ public class QuiltFileLoader : MonoBehaviour
         if (messageText)
         {
             messageText.text = text;
+            messageTextShadow.text = Regex.Replace(text, "<color=#[0-9A-Fa-f]+>", "<color=#000000>");
             messageClearTime = Time.time + lifetime;
         }
     }
@@ -390,7 +422,11 @@ public class QuiltFileLoader : MonoBehaviour
         {
             if (fileInfoClearTime < Time.time)
             {
-                if (fileInfoText) fileInfoText.text = "";
+                if (fileInfoText)
+                {
+                    fileInfoText.text = "";
+                    fileInfoTextShadow.text = "";
+                }
                 fileInfoClearTime = 0;
             }
         }
@@ -406,6 +442,7 @@ public class QuiltFileLoader : MonoBehaviour
         if (fileInfoText)
         {
             fileInfoText.text = text;
+            fileInfoTextShadow.text = Regex.Replace(text, "<color=#[0-9A-Fa-f]+>", "<color=#000000>");
             fileInfoClearTime = Time.time + lifetime;
         }
     }
@@ -427,9 +464,9 @@ public class QuiltFileLoader : MonoBehaviour
         string file = Path.GetFileName(path);
 
         ShowFileInfo(
-            "<size=10><color=#FFFFFF>" + file + "</color></size>"
+            "<size=40><color=#FFFFFF>" + file + "</color></size>"
             + System.Environment.NewLine
-            + "<size=6><color=#00FF00>" + dir + "</color></size>"
+            + "<size=30><color=#00FF00>" + dir + "</color></size>"
             , (fileInfoMode == FileInfoMode.Always ? Mathf.Infinity : fileInfoLifeTime)
             );
     }
@@ -655,8 +692,9 @@ public class QuiltFileLoader : MonoBehaviour
         // 読み込めたらファイル名を表示
         ShowFilename(currentFile);
 
-        // 次の画像にする時刻は再生時間分あとに設定
-        nextSlideTime = Time.time + videoPlayer.frameCount * videoPlayer.frameRate;
+        // スライドショー間隔より動画の時間が長ければ、次の画像にする時刻は再生時間だけ後に設定
+        float duration = (videoPlayer.frameRate == 0 ? 0 : videoPlayer.frameCount / videoPlayer.frameRate);
+        nextSlideTime = Time.time + (duration > slideShowInterval ? duration : slideShowInterval);
 
         // フラグを読み込み完了とする
         isLoading = false;
@@ -673,25 +711,20 @@ public class QuiltFileLoader : MonoBehaviour
             // 前のtextureを破棄
             Destroy(texture);
 
+            // 最初のフレームを使ってタイル数の推定
             texture = new Texture2D(videoRenderTexture.width, videoRenderTexture.height);
-
             RenderTexture currentRenderTexture = RenderTexture.active;
             RenderTexture.active = videoRenderTexture;
-            texture.ReadPixels(new Rect(0, 0, texture.width, texture.height), 0, 0);
+            texture.ReadPixels(new Rect(0, 0, videoRenderTexture.width, videoRenderTexture.height), 0, 0);
             texture.Apply();
             RenderTexture.active = currentRenderTexture;
 
             holoplay.customQuiltSettings = GetTilingType(texture);
-            //holoplay.quiltPreset = Quilt.Preset.Custom;
             holoplay.SetupQuilt();
-
-            //holoplay.overrideQuilt = texture;
-            holoplay.overrideQuilt = null;      // ←動画の場合直接 quiltRT に描画させるため
-
-            holoplay.quiltRT.filterMode = FilterMode.Bilinear;
-            videoPlayer.targetTexture = holoplay.quiltRT;   // 動画の描画先をこちらにすることで表示
-
             //Debug.Log("Estimaged tiling: " + holoplay.customQuiltSettings.numViews);     // 選択されたTiling
+
+            holoplay.overrideQuilt = videoRenderTexture;
+            holoplay.quiltRT.filterMode = FilterMode.Bilinear;
         }
     }
 
@@ -806,7 +839,8 @@ public class QuiltFileLoader : MonoBehaviour
 
         // Standalone File Browserを利用
         var extensions = new[] {
-                new ExtensionFilter("Image Files",  imageExtensions),
+                new ExtensionFilter("Image & Movie", imageExtensions.Concat(movieExtensions).ToArray()),
+                new ExtensionFilter("Image Files", imageExtensions),
                 new ExtensionFilter("Movie Files", movieExtensions ),
                 new ExtensionFilter("All Files", "*" ),
             };
