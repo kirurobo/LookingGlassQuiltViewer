@@ -7,9 +7,44 @@ using Kirurobo;
 using LookingGlass;
 using SFB;
 using UnityEngine.Video;
+using UnityEngine.XR;
+using UnityEngine.InputSystem;
 
 public class QuiltFileLoader : MonoBehaviour
 {
+    /// <summary>
+    /// ファイル名とフォルダ名の表示モード
+    /// </summary>
+    public enum FileInfoMode
+    {
+        None = 0,           // 表示しない
+        WhenChanged = 1,    // ロード直後のみ表示
+        Always = 2,         // 常に表示
+    }
+
+    /// <summary>
+    /// スライドショー切替時間の選択肢 [s]
+    /// </summary>
+    private int[] slideShowTimes =
+    {
+        0,      // 自動めくりをしない
+        5,
+        10,
+        20,
+        30,
+        60,
+    };
+
+    /// <summary>
+    /// PlayerPrefsで使うキー
+    /// </summary>
+    private static class PrefItems
+    {
+        public static string SlideShowInterval = "SlideShowInterval";
+        public static string FileInfoMode = "FileInfoMode";
+        public static string StartupFilePath = "StartupFilePath";
+    }
+
     WindowController window;
     Texture2D texture;
     VideoPlayer videoPlayer;
@@ -17,14 +52,23 @@ public class QuiltFileLoader : MonoBehaviour
     Holoplay holoplay;
     Quilt.Settings defaultTiling;
 
-    public TMPro.TextMeshPro messageText;       // ファイル名等表示用のText
+    HoloPlayButtonListener buttonListener;      // DirectInputによりバックグラウンドでもボタン取得
+
+    public TMPro.TextMeshPro messageText;       // メッセージ表示用のText
+    public TMPro.TextMeshPro fileInfoText;      // ファイル名等表示用のText
     public GameObject prevIndicator;            // 前のファイルへ移動時に表示するオブジェクト
     public GameObject nextIndicator;            // 次のファイルへ移動時に表示するオブジェクト
 
     public int frameRateForStill = 10;          // 静止画表示時のフレームレート指定 [fps]
     public int frameRateForMovie = 60;          // 動画再生時のフレームレート指定 [fps]
 
-    static readonly string[] imageExtensions = { "png", "jpg", "jpeg" };
+    public float fileInfoLifeTime = 5f;         // ファイル名の自動消去時間 [s]
+    public int slideShowInterval = 0;           // スライドショーの切替時間 [s] 0だと切替なし
+
+    // ファイル名表示モード
+    public FileInfoMode fileInfoMode = FileInfoMode.WhenChanged;
+
+    static readonly string[] imageExtensions = { "png", "jpg", "jpeg", "jfif" };
     static readonly string[] movieExtensions = { "mp4", "webm", "mov", "avi" };
 
 
@@ -44,6 +88,11 @@ public class QuiltFileLoader : MonoBehaviour
     float messageClearTime = 0;
 
     /// <summary>
+    /// ファイル情報を表示した場合、それを消去する時刻[s]をもつ
+    /// </summary>
+    float fileInfoClearTime = 0;
+
+    /// <summary>
     /// スライドショー対象の指定ファイル。
     /// これが空ならば現在開いたファイルと同じディレクトリを探す。
     /// </summary>
@@ -54,6 +103,35 @@ public class QuiltFileLoader : MonoBehaviour
     /// </summary>
     string currentFile;
 
+    /// <summary>
+    /// この時刻をすぎると次のスライドへ移る
+    /// </summary>
+    float nextSlideTime = 0f;
+
+
+    /// <summary>
+    /// 保存された設定を読み込む
+    /// </summary>
+    private void LoadSettings()
+    {
+        slideShowInterval = PlayerPrefs.GetInt(PrefItems.SlideShowInterval);
+        fileInfoMode = (FileInfoMode)PlayerPrefs.GetInt(PrefItems.FileInfoMode);
+        string path = PlayerPrefs.GetString(PrefItems.StartupFilePath);
+        if (!string.IsNullOrEmpty(path) && File.Exists(path))
+        {
+            LoadFile(path);
+        }
+    }
+
+    /// <summary>
+    /// 現在の設定を保存
+    /// </summary>
+    private void SaveSettings()
+    {
+        PlayerPrefs.SetInt(PrefItems.SlideShowInterval, slideShowInterval);
+        PlayerPrefs.SetInt(PrefItems.FileInfoMode, (int)fileInfoMode);
+        PlayerPrefs.SetString(PrefItems.StartupFilePath, currentFile);
+    }
 
     // Use this for initialization
     void Start()
@@ -91,31 +169,89 @@ public class QuiltFileLoader : MonoBehaviour
 
         // メッセージ欄を最初に消去
         ShowMessage("");
+        ShowFileInfo("");
+
+        // PlayerPrefsから設定と前回のファイルを読み込み
+        LoadSettings();
+
+        // スライドショーが行われるならその間隔を最初に表示
+        if (slideShowInterval > 0) {
+            ShowMessage("Slideshow: " + slideShowInterval + " s");
+        }
+
+        // バックグラウンドでのボタン管理
+        SetupButtonListener();
 
         // カーソルを表示するか否かを記憶
         isCursorVisible = Cursor.visible;
-
     }
 
+    /// <summary>
+    /// バックグラウンドでも操作できるようButtonManagerは使わず、独自クラスでボタン処理
+    /// </summary>
+    private void SetupButtonListener()
+    {
+        buttonListener = new HoloPlayButtonListener();
+        buttonListener.OnkeyDown += ButtonListener_OnkeyDown;
+    }
+
+    /// <summary>
+    /// Looking Glass のボタンが押されたときに呼ばれる
+    /// </summary>
+    /// <param name="button"></param>
+    private void ButtonListener_OnkeyDown(HoloPlayButtonListener.HoloPlayButton button)
+    {
+        if (isLoading) return;      // ローディング中なら処理はしない
+
+        switch (button)
+        {
+            case HoloPlayButtonListener.HoloPlayButton.Left:
+                ShowMessage("");                // ファイル名が表示されていれば消す
+                LoadFile(GetNextFile(-1));      // 前のファイルを開く
+                break;
+
+            case HoloPlayButtonListener.HoloPlayButton.Right:
+                ShowMessage("");                // ファイル名が表示されていれば消す
+                LoadFile(GetNextFile(1));       // 次のファイルを開く
+                break;
+
+            case HoloPlayButtonListener.HoloPlayButton.Circle:
+                ToggleFileInfoMode();           // ファイル名表示モード切替
+                break;
+
+            case HoloPlayButtonListener.HoloPlayButton.Square:
+                ToggleSlideShowInterval();      // スライドショー間隔切替
+                break;
+        }
+    }
+
+    /// <summary>
+    /// 毎フレームの処理
+    /// </summary>
     void Update()
     {
+        buttonListener.Update();    // バックグラウンドでもボタン状態取得
+
         // 操作できるのはファイル読み込み待ちでないときだけ
         if (!isLoading)
         {
+            // [Esc] キーで終了
             if (Input.GetKeyUp(KeyCode.Escape))
             {
                 Quit();
             }
+
             // [O] キーまたは右クリックでファイル選択ダイアログを開く
             if (Input.GetKeyDown(KeyCode.O) || Input.GetMouseButtonUp(1))
             {
                 OpenFile();
             }
 
-            // [S] キーを押されたタイミングでカーソルや情報を非表示に
+            // [S] キーを押されたタイミングで、スクリーンショットのためカーソルや情報を非表示に
             if (Input.GetKeyDown(KeyCode.S))
             {
                 ShowMessage("");
+                ShowFileInfo("");
                 Cursor.visible = false;
             }
             // [S] キーが離されたタイミングで現在の画面を保存。カーソルを写さないため非表示化とタイミングをずらす
@@ -125,35 +261,58 @@ public class QuiltFileLoader : MonoBehaviour
             }
 
             // 前の画像
-            if (ButtonManager.GetButtonDown(ButtonType.LEFT) || Input.GetKeyDown(KeyCode.LeftArrow))
+            if (Input.GetKeyDown(KeyCode.LeftArrow))
             {
-                ShowMessage("");    // ファイル名が表示されていれば消す
+                ShowFileInfo("");    // ファイル名が表示されていれば消す
                 LoadFile(GetNextFile(-1));
             }
 
             // 次の画像
-            if (ButtonManager.GetButtonDown(ButtonType.RIGHT) || Input.GetKeyDown(KeyCode.RightArrow))
+            if (Input.GetKeyDown(KeyCode.RightArrow))
             {
-                ShowMessage("");    // ファイル名が表示されていれば消す
+                ShowFileInfo("");    // ファイル名が表示されていれば消す
                 LoadFile(GetNextFile(1));
             }
 
             // 開かれているファイル名を表示
-            if (ButtonManager.GetButtonDown(ButtonType.CIRCLE))
+            if (Input.GetKeyDown(KeyCode.UpArrow))
             {
-                ShowFilename(currentFile);
+                ToggleFileInfoMode();
             }
+
+            UpdateSlideShow();
         }
 
         // 左ボタンが押されていることを表示
-        if (prevIndicator) prevIndicator.SetActive((ButtonManager.GetButton(ButtonType.LEFT) || Input.GetKey(KeyCode.LeftArrow)));
+        if (prevIndicator) prevIndicator.SetActive(Input.GetKey(KeyCode.LeftArrow) || buttonListener.GetKey(HoloPlayButtonListener.HoloPlayButton.Left));
 
         // 右ボタンが押されていることを表示
-        if (nextIndicator) nextIndicator.SetActive((ButtonManager.GetButton(ButtonType.RIGHT) || Input.GetKey(KeyCode.RightArrow)));
+        if (nextIndicator) nextIndicator.SetActive(Input.GetKey(KeyCode.RightArrow) || buttonListener.GetKey(HoloPlayButtonListener.HoloPlayButton.Right));
 
         //UpdateVideo();
+
         UpdateMessage();
-        //UpdateIndicator();
+        UpdateFileInfo();
+    }
+
+    /// <summary>
+    /// スライドショーの自動めくり処理
+    /// </summary>
+    private void UpdateSlideShow()
+    {
+        // 間隔が0sなら何もしない
+        if (slideShowInterval <= 0)
+        {
+            nextSlideTime = Mathf.Infinity;
+            return;
+        }
+
+        // 画像切替時刻をすぎていたら次の画像に移動
+        if (Time.time >= nextSlideTime)
+        {
+            // 次の画像を読み込み
+            LoadFile(GetNextFile(1));
+        }
     }
     
     /// <summary>
@@ -167,6 +326,14 @@ public class QuiltFileLoader : MonoBehaviour
         // スタンドアローンなら、アプリケーションを終了
         Application.Quit();
 #endif
+    }
+
+    /// <summary>
+    /// 終了時に設定を保存
+    /// </summary>
+    private void OnApplicationQuit()
+    {
+        SaveSettings();
     }
 
     /// <summary>
@@ -194,7 +361,7 @@ public class QuiltFileLoader : MonoBehaviour
         {
             if (messageClearTime < Time.time)
             {
-                messageText.text = "";
+                if (messageText) messageText.text = "";
                 messageClearTime = 0;
             }
         }
@@ -214,15 +381,114 @@ public class QuiltFileLoader : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// メッセージを指定時刻に消す
+    /// </summary>
+    private void UpdateFileInfo()
+    {
+        if (fileInfoClearTime > 0)
+        {
+            if (fileInfoClearTime < Time.time)
+            {
+                if (fileInfoText) fileInfoText.text = "";
+                fileInfoClearTime = 0;
+            }
+        }
+    }
+
+    /// <summary>
+    /// 一定時間で消えるファイル情報表示
+    /// </summary>
+    /// <param name="text">メッセージ文字列</param>
+    /// <param name="lifetime">消えるまでの時間[s]</param>
+    private void ShowFileInfo(string text, float lifetime = 5f)
+    {
+        if (fileInfoText)
+        {
+            fileInfoText.text = text;
+            fileInfoClearTime = Time.time + lifetime;
+        }
+    }
+
+    /// <summary>
+    /// ファイル名を表示
+    /// </summary>
+    /// <param name="path"></param>
     private void ShowFilename(string path)
     {
+        if (fileInfoMode == FileInfoMode.None)
+        {
+            // 表示しないならメッセージ消去
+            ShowFileInfo("");
+            return;
+        }
+
         string dir = Path.GetFileName(Path.GetDirectoryName(path));
         string file = Path.GetFileName(path);
-        ShowMessage(
+
+        ShowFileInfo(
             "<size=10><color=#FFFFFF>" + file + "</color></size>"
             + System.Environment.NewLine
             + "<size=6><color=#00FF00>" + dir + "</color></size>"
+            , (fileInfoMode == FileInfoMode.Always ? Mathf.Infinity : fileInfoLifeTime)
             );
+    }
+
+    /// <summary>
+    /// ファイル名表示モード切替
+    /// </summary>
+    private void ToggleFileInfoMode()
+    {
+        switch (fileInfoMode)
+        {
+            case FileInfoMode.WhenChanged:
+                fileInfoMode = FileInfoMode.Always;
+                ShowMessage("File name: Always show");
+                break;
+
+            case FileInfoMode.Always:
+                fileInfoMode = FileInfoMode.None;
+                ShowMessage("File name: Hide");
+                break;
+
+            default:
+                fileInfoMode = FileInfoMode.WhenChanged;
+                ShowMessage("File name: On loaded");
+                break;
+
+        }
+        ShowFilename(currentFile);
+    }
+
+    /// <summary>
+    /// スライドショーの間隔を変更
+    /// </summary>
+    private void ToggleSlideShowInterval()
+    {
+        if (slideShowInterval >= slideShowTimes[slideShowTimes.Length - 1])
+        {
+            // 選択肢の最後またはそれより大きい値だったら0に戻す
+            slideShowInterval = 0;
+
+            ShowMessage("Slideshow: OFF");
+        }
+        else
+        {
+            // 最大でなければ、今の次に大きな値にする
+            foreach (int val in slideShowTimes)
+            {
+                if (val > slideShowInterval)
+                {
+                    slideShowInterval = val;
+                    ShowMessage("Slideshow: " + val + " s");
+
+                    break;
+                }
+            }
+        }
+
+        // 次の画像の時刻を再設定
+        nextSlideTime = Time.time + slideShowInterval;
     }
 
     /// <summary>
@@ -278,6 +544,9 @@ public class QuiltFileLoader : MonoBehaviour
         isLoading = true;
         currentFile = path;
 
+        // ファイル読み込み後に次の時刻は更新されるが、念のためここでも再設定
+        nextSlideTime = Time.time + slideShowInterval;
+
         // 動画は停止し初期状態に戻す
         if (videoPlayer)
         {
@@ -327,14 +596,20 @@ public class QuiltFileLoader : MonoBehaviour
         holoplay.SetQuiltPreset(Quilt.Preset.Custom);
         holoplay.overrideQuilt = texture;
 
+        holoplay.quiltRT.filterMode = FilterMode.Trilinear;
         holoplay.SetupQuilt();
-        holoplay.quiltRT.filterMode = FilterMode.Bilinear;
 
         //Debug.Log("Estimaged tiling: " + holoplay.quiltSettings.numViews);     // 選択されたTiling
 
     
         // 念のため毎回GCをしてみる…
         System.GC.Collect();
+
+        // 読み込めたらファイル名を表示
+        ShowFilename(currentFile);
+
+        // 次の画像にする時刻を設定
+        nextSlideTime = Time.time + slideShowInterval;
 
         // フラグを読み込み完了とする
         isLoading = false;
@@ -376,6 +651,12 @@ public class QuiltFileLoader : MonoBehaviour
 
         // 念のため読み込み毎にGCをしてみる…
         System.GC.Collect();
+
+        // 読み込めたらファイル名を表示
+        ShowFilename(currentFile);
+
+        // 次の画像にする時刻は再生時間分あとに設定
+        nextSlideTime = Time.time + videoPlayer.frameCount * videoPlayer.frameRate;
 
         // フラグを読み込み完了とする
         isLoading = false;
