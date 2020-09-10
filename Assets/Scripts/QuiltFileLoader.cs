@@ -397,8 +397,8 @@ public class QuiltFileLoader : MonoBehaviour
         holoplay.SetQuiltPreset(Quilt.Preset.Custom);
         holoplay.overrideQuilt = texture;
 
-        holoplay.SetupQuilt();
         holoplay.quiltRT.filterMode = FilterMode.Bilinear;
+        holoplay.SetupQuilt();
 
         //Debug.Log("Estimaged tiling: " + holoplay.quiltSettings.numViews);     // 選択されたTiling
 
