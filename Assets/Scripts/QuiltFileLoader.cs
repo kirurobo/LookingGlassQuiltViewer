@@ -10,6 +10,7 @@ using UnityEngine.Video;
 using UnityEngine.XR;
 using UnityEngine.InputSystem;
 using System.Linq;
+using System.Text.RegularExpressions;
 
 public class QuiltFileLoader : MonoBehaviour
 {
@@ -55,10 +56,13 @@ public class QuiltFileLoader : MonoBehaviour
 
     HoloPlayButtonListener buttonListener;      // DirectInputによりバックグラウンドでもボタン取得
 
-    public TMPro.TextMeshPro messageText;       // メッセージ表示用のText
-    public TMPro.TextMeshPro fileInfoText;      // ファイル名等表示用のText
+    public TextMesh messageText;                // メッセージ表示用のText
+    public TextMesh fileInfoText;               // ファイル名等表示用のText
     public GameObject prevIndicator;            // 前のファイルへ移動時に表示するオブジェクト
     public GameObject nextIndicator;            // 次のファイルへ移動時に表示するオブジェクト
+
+    private TextMesh messageTextShadow;         // メッセージ表示用のTextの影
+    private TextMesh fileInfoTextShadow;        // ファイル名等表示用のTextの影
 
     public int frameRateForStill = 10;          // 静止画表示時のフレームレート指定 [fps]
     public int frameRateForMovie = 60;          // 動画再生時のフレームレート指定 [fps]
@@ -134,6 +138,29 @@ public class QuiltFileLoader : MonoBehaviour
         PlayerPrefs.SetString(PrefItems.StartupFilePath, currentFile);
     }
 
+    /// <summary>
+    /// TextMeshを複製して影にする
+    /// </summary>
+    private void InitializeTextShadow()
+    {
+        if (messageText)
+        {
+            messageTextShadow = GameObject.Instantiate<TextMesh>(messageText);
+            messageTextShadow.transform.parent = messageText.transform;
+            messageTextShadow.transform.localPosition += new Vector3(0.05f, -0.04f, 0.01f);
+            messageTextShadow.color = Color.black;
+            messageText.GetComponent<MeshRenderer>().sortingOrder += 1;
+        }
+        if (fileInfoText)
+        {
+            fileInfoTextShadow = GameObject.Instantiate<TextMesh>(fileInfoText);
+            fileInfoTextShadow.transform.parent = fileInfoText.transform;
+            fileInfoTextShadow.transform.localPosition += new Vector3(0.05f, -0.04f, 0.01f);
+            fileInfoTextShadow.color = Color.black;
+            fileInfoText.GetComponent<MeshRenderer>().sortingOrder += 1;
+        }
+    }
+
     // Use this for initialization
     void Start()
     {
@@ -164,6 +191,9 @@ public class QuiltFileLoader : MonoBehaviour
         // 操作に対する表示は非表示にしておく
         if (nextIndicator) nextIndicator.SetActive(false);
         if (prevIndicator) prevIndicator.SetActive(false);
+
+        // TextMeshがあれば複製して影とする
+        InitializeTextShadow();
 
         // サンプルの画像を読み込み
         LoadFile(Path.Combine(Application.streamingAssetsPath, "startup.png"));
@@ -358,7 +388,11 @@ public class QuiltFileLoader : MonoBehaviour
         {
             if (messageClearTime < Time.time)
             {
-                if (messageText) messageText.text = "";
+                if (messageText)
+                {
+                    messageText.text = "";
+                    messageTextShadow.text = "";
+                }
                 messageClearTime = 0;
             }
         }
@@ -374,6 +408,7 @@ public class QuiltFileLoader : MonoBehaviour
         if (messageText)
         {
             messageText.text = text;
+            messageTextShadow.text = Regex.Replace(text, "<color=#[0-9A-Fa-f]+>", "<color=#000000>");
             messageClearTime = Time.time + lifetime;
         }
     }
@@ -387,7 +422,11 @@ public class QuiltFileLoader : MonoBehaviour
         {
             if (fileInfoClearTime < Time.time)
             {
-                if (fileInfoText) fileInfoText.text = "";
+                if (fileInfoText)
+                {
+                    fileInfoText.text = "";
+                    fileInfoTextShadow.text = "";
+                }
                 fileInfoClearTime = 0;
             }
         }
@@ -403,6 +442,7 @@ public class QuiltFileLoader : MonoBehaviour
         if (fileInfoText)
         {
             fileInfoText.text = text;
+            fileInfoTextShadow.text = Regex.Replace(text, "<color=#[0-9A-Fa-f]+>", "<color=#000000>");
             fileInfoClearTime = Time.time + lifetime;
         }
     }
@@ -424,9 +464,9 @@ public class QuiltFileLoader : MonoBehaviour
         string file = Path.GetFileName(path);
 
         ShowFileInfo(
-            "<size=10><color=#FFFFFF>" + file + "</color></size>"
+            "<size=40><color=#FFFFFF>" + file + "</color></size>"
             + System.Environment.NewLine
-            + "<size=6><color=#00FF00>" + dir + "</color></size>"
+            + "<size=30><color=#00FF00>" + dir + "</color></size>"
             , (fileInfoMode == FileInfoMode.Always ? Mathf.Infinity : fileInfoLifeTime)
             );
     }
