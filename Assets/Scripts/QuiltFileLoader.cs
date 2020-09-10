@@ -344,8 +344,7 @@ public class QuiltFileLoader : MonoBehaviour
     {
         if (videoPlayer && videoPlayer.isPlaying && texture)
         {
-            // HoloPlay SDK 1.3.1 で動画が表示されなくなったことに対応。
-            //  これで良いのかはわからないがひとまず表示されてはいる。
+            // 強制的に描画？
             holoplay.RenderQuilt();
         }
     }
