@@ -169,6 +169,7 @@ public class QuiltFileLoader : MonoBehaviour
 
         // メッセージ欄を最初に消去
         ShowMessage("");
+        ShowFileInfo("");
 
         // PlayerPrefsから設定と前回のファイルを読み込み
         LoadSettings();

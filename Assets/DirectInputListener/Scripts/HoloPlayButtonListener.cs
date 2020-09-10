@@ -1,12 +1,19 @@
-﻿using System;
-using System.Collections.Generic;
-using UnityEngine;
+﻿// SharpDX.DirectInput を利用してアプリがバックグラウンドでも Looking Glass のボタンを使えるようにする
+//
+// ButtonManage の代わりに使ってください
+//
+// Author; Kirurobo
+// License: MIT License
+
 
 // WindowsならばバックグラウンドでもLookingGlassのボタンが使えるようDirectInputを利用
 #if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
 #define USE_DIRECTINPUT
 #endif
 
+using System;
+using System.Collections.Generic;
+using UnityEngine;
 
 #if USE_DIRECTINPUT
 using SharpDX.DirectInput;
@@ -60,18 +67,6 @@ namespace Kirurobo
         {
             return (state.Buttons[(int)button]);
         }
-
-        /// <summary>
-        /// 指定ボタンが押されているか判定
-        /// </summary>
-        /// <param name="state"></param>
-        /// <param name="button"></param>
-        /// <returns></returns>
-        private bool IsPressed(JoystickState state, HoloPlayButton button)
-        {
-            return (state.Buttons[(int)button]);
-        }
-
 #else
         /// <summary>
         /// Looking Glassの接続数
@@ -118,7 +113,7 @@ namespace Kirurobo
             DirectInput dinput = new DirectInput();
 
             // Looking Glass は Supplemental になっているようなのでそこを探す
-            foreach (DeviceInstance device in dinput.GetDevices(DeviceType.Supplemental, DeviceEnumerationFlags.AllDevices))
+            foreach (DeviceInstance device in dinput.GetDevices(SharpDX.DirectInput.DeviceType.Supplemental, DeviceEnumerationFlags.AllDevices))
             {
                 if (device.ProductName.Contains("HoloPlay"))
                 {
