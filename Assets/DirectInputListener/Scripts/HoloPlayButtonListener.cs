@@ -2,7 +2,13 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+// WindowsならばバックグラウンドでもLookingGlassのボタンが使えるようDirectInputを利用
 #if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+#define USE_DIRECTINPUT
+#endif
+
+
+#if USE_DIRECTINPUT
 using SharpDX.DirectInput;
 #else
 using UnityEngine.InputSystem;
@@ -37,7 +43,7 @@ namespace Kirurobo
         public event KeyEventHandler OnkeyDown;
         public event KeyEventHandler OnkeyUp;
 
-#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+#if USE_DIRECTINPUT
         /// <summary>
         /// 発見されたデバイスが保存される
         /// </summary>
@@ -67,7 +73,15 @@ namespace Kirurobo
         }
 
 #else
+        /// <summary>
+        /// Looking Glassの接続数
+        /// </summary>
         private int holoplayDevicesCount = 0;
+
+        /// <summary>
+        /// KeyCode.Joystick?Button? と HoloPlayButton の対応リスト
+        /// </summary>
+        private Dictionary<KeyCode, HoloPlayButton> joyStickButtonMap = new Dictionary<KeyCode, HoloPlayButton>();
            
 #endif
 
@@ -86,7 +100,7 @@ namespace Kirurobo
         /// <returns></returns>
         public int GetDeviceCount()
         {
-#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+#if USE_DIRECTINPUT
             return holoplayDevices.Count;
 #else
             return holoplayDevicesCount;
@@ -98,7 +112,7 @@ namespace Kirurobo
         /// </summary>
         public void RefreshDevices()
         {
-#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+#if USE_DIRECTINPUT
             // 参考 http://csdegame.net/sharpdx/dx_input_pad.html
 
             DirectInput dinput = new DirectInput();
@@ -116,12 +130,32 @@ namespace Kirurobo
                 }
             }
 #else
+            // デバイス一覧を初期化
+            holoplayDevicesCount = 0;
+            joyStickButtonMap.Clear();
+
             var joystickNames = Input.GetJoystickNames();
             for (int i = 0; i < joystickNames.Length; i++)
             {
+                // Looking Glass か判別
                 if (joystickNames[i].ToLower().Contains("holoplay"))
                 {
+                    // 接続数をカウント
                     holoplayDevicesCount++;
+
+                    // Unity上でのジョイスティック番号に合わせたKeyCodeとボタンの対応を記憶
+                    foreach (HoloPlayButton button in Enum.GetValues(typeof(HoloPlayButton))) {
+                        string buttonName = String.Format(
+                            "Joystick{0}Button{1}",
+                            i + 1,
+                            (int)button
+                            );
+                        KeyCode code;
+                        if (Enum.TryParse<KeyCode>(buttonName, out code))
+                        {
+                            joyStickButtonMap.Add(code, button);
+                        }
+                     }
                 }
             }
 #endif
@@ -148,7 +182,7 @@ namespace Kirurobo
         /// </summary>
         private void UpdateButtonState()
         {
-#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+#if USE_DIRECTINPUT
             foreach (HoloPlayButton button in Enum.GetValues(typeof(HoloPlayButton)))
             {
                 currentState[button] = false;
@@ -172,6 +206,22 @@ namespace Kirurobo
                 {
                     // 複数デバイスがあれば、いずれかが押されたら押下と判断
                     if (IsPressed(state, button)) currentState[button] = true;
+                }
+            }
+#else
+            // 現在の状態をクリア
+            foreach (HoloPlayButton button in Enum.GetValues(typeof(HoloPlayButton)))
+            {
+                currentState[button] = false;
+            }
+
+            // 現在のボタン押下状態を取得
+            foreach (var map in joyStickButtonMap)
+            {
+                if (Input.GetKey(map.Key))
+                {
+                    // 複数デバイスがあれば、いずれかが押されたら押下と判断
+                    currentState[map.Value] = true;
                 }
             }
 #endif
