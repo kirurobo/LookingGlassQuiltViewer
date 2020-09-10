@@ -9,6 +9,7 @@ using SFB;
 using UnityEngine.Video;
 using UnityEngine.XR;
 using UnityEngine.InputSystem;
+using System.Linq;
 
 public class QuiltFileLoader : MonoBehaviour
 {
@@ -343,12 +344,9 @@ public class QuiltFileLoader : MonoBehaviour
     {
         if (videoPlayer && videoPlayer.isPlaying && texture)
         {
-            // 動画再生中ならば、内容を Texture2D として複製。たぶん重い。
-            RenderTexture currentRenderTexture = RenderTexture.active;
-            RenderTexture.active = videoRenderTexture;
-            texture.ReadPixels(new Rect(0, 0, texture.width, texture.height), 0, 0);
-            texture.Apply();
-            RenderTexture.active = currentRenderTexture;
+            // HoloPlay SDK 1.3.1 で動画が表示されなくなったことに対応。
+            //  これで良いのかはわからないがひとまず表示されてはいる。
+            holoplay.RenderQuilt();
         }
     }
 
@@ -655,8 +653,9 @@ public class QuiltFileLoader : MonoBehaviour
         // 読み込めたらファイル名を表示
         ShowFilename(currentFile);
 
-        // 次の画像にする時刻は再生時間分あとに設定
-        nextSlideTime = Time.time + videoPlayer.frameCount * videoPlayer.frameRate;
+        // スライドショー間隔より動画の時間が長ければ、次の画像にする時刻は再生時間だけ後に設定
+        float duration = (videoPlayer.frameRate == 0 ? 0 : videoPlayer.frameCount / videoPlayer.frameRate);
+        nextSlideTime = Time.time + (duration > slideShowInterval ? duration : slideShowInterval);
 
         // フラグを読み込み完了とする
         isLoading = false;
@@ -673,25 +672,20 @@ public class QuiltFileLoader : MonoBehaviour
             // 前のtextureを破棄
             Destroy(texture);
 
+            // 最初のフレームを使ってタイル数の推定
             texture = new Texture2D(videoRenderTexture.width, videoRenderTexture.height);
-
             RenderTexture currentRenderTexture = RenderTexture.active;
             RenderTexture.active = videoRenderTexture;
-            texture.ReadPixels(new Rect(0, 0, texture.width, texture.height), 0, 0);
+            texture.ReadPixels(new Rect(0, 0, videoRenderTexture.width, videoRenderTexture.height), 0, 0);
             texture.Apply();
             RenderTexture.active = currentRenderTexture;
 
             holoplay.customQuiltSettings = GetTilingType(texture);
-            //holoplay.quiltPreset = Quilt.Preset.Custom;
             holoplay.SetupQuilt();
-
-            //holoplay.overrideQuilt = texture;
-            holoplay.overrideQuilt = null;      // ←動画の場合直接 quiltRT に描画させるため
-
-            holoplay.quiltRT.filterMode = FilterMode.Bilinear;
-            videoPlayer.targetTexture = holoplay.quiltRT;   // 動画の描画先をこちらにすることで表示
-
             //Debug.Log("Estimaged tiling: " + holoplay.customQuiltSettings.numViews);     // 選択されたTiling
+
+            holoplay.overrideQuilt = videoRenderTexture;
+            holoplay.quiltRT.filterMode = FilterMode.Bilinear;
         }
     }
 
@@ -806,7 +800,8 @@ public class QuiltFileLoader : MonoBehaviour
 
         // Standalone File Browserを利用
         var extensions = new[] {
-                new ExtensionFilter("Image Files",  imageExtensions),
+                new ExtensionFilter("Image & Movie", imageExtensions.Concat(movieExtensions).ToArray()),
+                new ExtensionFilter("Image Files", imageExtensions),
                 new ExtensionFilter("Movie Files", movieExtensions ),
                 new ExtensionFilter("All Files", "*" ),
             };
