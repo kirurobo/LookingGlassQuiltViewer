@@ -67,7 +67,7 @@ Assets/DirectInputButtonListerner 以下をコピーし、ButtonManager の代�
 ## LookingGlassQuiltViewer
 Copyright (c) 2019-2020 Kirurobo
 Released under the MIT License  
-https://github.com/kirurobo/LookingGlassQuiltViewer/blob/master/LICENSE
+https://github.com/kirurobo/LookingGlassQuiltViewer/blob/master/LICENSE.txt
 
 
 ## HoloPlay SDK [(Link)](https://docs.lookingglassfactory.com/Unity/)
