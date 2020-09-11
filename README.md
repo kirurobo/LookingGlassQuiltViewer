@@ -85,10 +85,10 @@ https://github.com/gkngkc/UnityStandaloneFileBrowser/blob/master/LICENSE.txt
 ## HoloPlayButtonListener
 Copyright (c) 2020 Kirurobo
 Released under the MIT License  
-https://github.com/kirurobo/LookingGlassQuiltViewer/blob/master/Assets/DirectInputListener/LICENSE.txt
+https://github.com/kirurobo/LookingGlassQuiltViewer/blob/master/Assets/ButtonListener/LICENSE.txt
 
 
 ## SharpDX
 Copyright (c) 2010-2015 SharpDX - Alexandre Mutel
 Released under the MIT License  
-https://github.com/kirurobo/LookingGlassQuiltViewer/blob/master/Assets/DirectInputListener/LICENSE.txt
+https://github.com/kirurobo/LookingGlassQuiltViewer/blob/master/Assets/ButtonListener/LICENSE.txt
