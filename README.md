@@ -52,9 +52,11 @@ Assets/DirectInputButtonListerner 以下をコピーし、ButtonManager の代�
 
 次に起動すると自動で読み込まれます。
 
-設定を消去したい場合は下記を削除してください。
+設定を消去したい場合、起動中に R キーを押すことで、終了時に設定が消去されます。
+
+あるいは下記を削除してください。
 - Windows： レジストリの HKEY_CURRENT_USER\Software\Kirurobo\LookingGlassQuiltViewer
-- macOS： ユーザーフォルダ下の Library/Preferences/unity.Kirurobo.LookingGlassQuiltViewer.plist
+- macOS： ユーザーフォルダ下の ~/Library/Preferences/unity.Kirurobo.LookingGlassQuiltViewer.plist
 
 
 # System requirements
@@ -67,7 +69,7 @@ Assets/DirectInputButtonListerner 以下をコピーし、ButtonManager の代�
 ## LookingGlassQuiltViewer
 Copyright (c) 2019-2020 Kirurobo
 Released under the MIT License  
-https://github.com/kirurobo/LookingGlassQuiltViewer/blob/master/LICENSE
+https://github.com/kirurobo/LookingGlassQuiltViewer/blob/master/LICENSE.txt
 
 
 ## HoloPlay SDK [(Link)](https://docs.lookingglassfactory.com/Unity/)
