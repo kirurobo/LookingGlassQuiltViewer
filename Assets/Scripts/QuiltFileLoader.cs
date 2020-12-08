@@ -76,7 +76,6 @@ public class QuiltFileLoader : MonoBehaviour
     static readonly string[] imageExtensions = { "png", "jpg", "jpeg", "jfif" };
     static readonly string[] movieExtensions = { "mp4", "webm", "mov", "avi" };
 
-
     /// <summary>
     /// 読み込み待ちならtrueにする
     /// </summary>
@@ -113,6 +112,19 @@ public class QuiltFileLoader : MonoBehaviour
     /// </summary>
     float nextSlideTime = 0f;
 
+    /// <summary>
+    /// これがtrueなら終了時にPlayerPrefsの設定を消去する
+    /// </summary>
+    bool willSettingsReset = false;
+
+    /// <summary>
+    /// デフォルト画像のパス
+    /// </summary>
+    string defaultImagePath
+    {
+        get { return Path.Combine(Application.streamingAssetsPath, "startup.png"); }
+    }
+
 
     /// <summary>
     /// 保存された設定を読み込む
@@ -136,6 +148,14 @@ public class QuiltFileLoader : MonoBehaviour
         PlayerPrefs.SetInt(PrefItems.SlideShowInterval, slideShowInterval);
         PlayerPrefs.SetInt(PrefItems.FileInfoMode, (int)fileInfoMode);
         PlayerPrefs.SetString(PrefItems.StartupFilePath, currentFile);
+    }
+
+    /// <summary>
+    /// 保存されている設定をすべて消去
+    /// </summary>
+    private void DeleteSettings()
+    {
+        PlayerPrefs.DeleteAll();
     }
 
     /// <summary>
@@ -196,17 +216,18 @@ public class QuiltFileLoader : MonoBehaviour
         InitializeTextShadow();
 
         // サンプルの画像を読み込み
-        LoadFile(Path.Combine(Application.streamingAssetsPath, "startup.png"));
+        LoadFile(defaultImagePath);
 
         // メッセージ欄を最初に消去
         ShowMessage("");
         ShowFileInfo("");
 
-        // PlayerPrefsから設定と前回のファイルを読み込み
+        // 保存された設定を読込
         LoadSettings();
 
         // スライドショーが行われるならその間隔を最初に表示
-        if (slideShowInterval > 0) {
+        if (slideShowInterval > 0)
+        {
             ShowMessage("Slideshow: " + slideShowInterval + " s");
         }
 
@@ -291,6 +312,20 @@ public class QuiltFileLoader : MonoBehaviour
                 SaveFile();
             }
 
+            // [R] キーでPlayerPrefsに保存された設定を消去し、デフォルトの画像を表示
+            if (Input.GetKeyDown(KeyCode.R))
+            {
+                DeleteSettings();
+
+                // デフォルトの画像を読み込み
+                LoadFile(defaultImagePath);
+
+                // 終了時に削除されるようにする
+                ShowFileInfo("History has been removed");
+                ShowMessage("Settings will be reset on quit");
+                willSettingsReset = true;
+            }
+
             // 前の画像
             if (Input.GetKeyDown(KeyCode.LeftArrow))
             {
@@ -364,7 +399,12 @@ public class QuiltFileLoader : MonoBehaviour
     /// </summary>
     private void OnApplicationQuit()
     {
-        SaveSettings();
+        if (willSettingsReset)
+        {
+            DeleteSettings();
+        }else { 
+            SaveSettings();
+        }
     }
 
     /// <summary>
@@ -577,6 +617,7 @@ public class QuiltFileLoader : MonoBehaviour
     /// <param name="uri">Path.</param>
     private void LoadFile(string path) {
         if (string.IsNullOrEmpty(path)) return;
+        if (!File.Exists(path)) return;
 
         isLoading = true;
         currentFile = path;
@@ -800,9 +841,19 @@ public class QuiltFileLoader : MonoBehaviour
             string directory = Path.GetDirectoryName(currentFile);
             files = new List<string>();
             AddTargetDirectory(directory, ref files);   // ディレクトリ内の画像一覧を取得
-            files.Sort();   // パスの順に並び替え
-            currentIndex = files.IndexOf(currentFile);
-            //Debug.Log("Index: " + currentIndex);
+
+            if (files.Count < 1)
+            {
+                // ファイルが全く無かった場合はデフォルト画像を読込み
+                files.Add(defaultImagePath);
+                currentIndex = 0;
+            }
+            else
+            {
+                files.Sort();   // パスの順に並び替え
+                currentIndex = files.IndexOf(currentFile);
+                //Debug.Log("Index: " + currentIndex);
+            }
         }
 
         int index = currentIndex + step;
