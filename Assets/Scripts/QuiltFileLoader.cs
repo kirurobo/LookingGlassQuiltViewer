@@ -973,9 +973,20 @@ public class QuiltFileLoader : MonoBehaviour
     /// <returns></returns>
     private Quilt.Settings GetTilingType(Texture2D texture)
     {
+        // 縦横比でポートレイトかを判断
+        var isPortrait = (holoplay.cal.screenHeight > holoplay.cal.screenWidth);
+
+        // 8x6 では 4x6 でも高相関となるため例外的にチェック
+        int index4x6 = -1;
+
         List<Quilt.Settings> tilingPresets = new List<Quilt.Settings>();
         foreach (var preset in Quilt.presets)
         {
+            if (preset.viewColumns == 4 && preset.viewRows == 6)
+            {
+                index4x6 = tilingPresets.Count;
+            }
+
             if ((preset.quiltHeight == texture.height) && (preset.quiltWidth == texture.width))
             {
                 // 画像サイズがプリセットのサイズと一致すれば候補とする
@@ -992,6 +1003,9 @@ public class QuiltFileLoader : MonoBehaviour
                         ));
             }
         }
+
+        // 8x6 == 48 のパターンもさらに調べる。Looking Glass Portrait で普通にQuiltを作るとこうなるため。
+        tilingPresets.Add(new Quilt.Settings(texture.width, texture.height, 8, 6, 48));
 
         // 6x10 のパターンも追加で調べる
         tilingPresets.Add(new Quilt.Settings(texture.width, texture.height, 6, 10, 60));
@@ -1054,14 +1068,28 @@ public class QuiltFileLoader : MonoBehaviour
         float minScore = float.MaxValue;
         for (int i = 0; i < tilingPresets.Count; i++)
         {
-            //Debug.Log(tilingPresets[i].presetName + " : " + score[i]);
+            //Debug.Log("Index: " + i + " Order: " + tilingPresets[i].viewColumns + ", " + tilingPresets[i].viewRows + " : " + score[i]);
 
             if (minScore > score[i])
             {
                 selectedIndex = i;
                 minScore = score[i];
             }
+
+            // 8x6 だった場合、4x6 のスコアとの差異が 5% 未満なら 8x6 を優先させる
+            if (tilingPresets[i].viewColumns == 8 && tilingPresets[i].viewRows == 6)
+            {
+                if (selectedIndex == index4x6)
+                {
+                    if (Mathf.Abs(minScore - score[i]) < (minScore * 0.05))
+                    {
+                        selectedIndex = i;
+                        minScore = score[i];
+                    }
+                }
+            }
         }
+        //Debug.Log(selectedIndex);
         return tilingPresets[selectedIndex];
     }
 }
