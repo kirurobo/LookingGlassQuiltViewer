@@ -322,11 +322,6 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 114865344359803568, guid: 3019d4eebe2593e428d7b9ccb096ceda,
         type: 3}
-      propertyPath: quiltPreset
-      value: -1
-      objectReference: {fileID: 0}
-    - target: {fileID: 114865344359803568, guid: 3019d4eebe2593e428d7b9ccb096ceda,
-        type: 3}
       propertyPath: background.a
       value: 1
       objectReference: {fileID: 0}
