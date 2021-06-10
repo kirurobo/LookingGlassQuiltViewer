@@ -1044,37 +1044,36 @@ public class QuiltFileLoader : MonoBehaviour
         int skip = texture.width / 512;     // 固定値 4 としてもでも動いたが、それだと4096pxのとき遅い
         if (skip < 1) skip = 1;             // 最低1はないと無限ループとなってしまう
 
-        // Tiling候補ごとに類似度を求める
+        // Calculate the score for each Tiling preset
         for (int presetIndex = 0; presetIndex < tilingPresets.Count; presetIndex++)
         {
             var preset = tilingPresets[presetIndex];
-            
             score[presetIndex] = 0;
+            
+            // Loop for each sample position in a view. It's not necessary to look at all pixels.
             for (int v = 0; v < preset.viewHeight; v += skip)
             {
                 for (int u = 0; u < preset.viewWidth; u += skip)
                 {
-                    Color prevPixelColor;
-                    // 次のviewとの比較なので、preset.numViews - 1 回繰り返す
-                    for (int tileNo = 0; tileNo < (preset.numViews - 1); tileNo++)
+                    Color pixelColor = Color.black;
+                    for (int viewNo = 0; viewNo < preset.numViews; viewNo++)
                     {
-                        int tileY = tileNo / preset.viewColumns;
-                        int tileX = tileNo % preset.viewColumns;
-                        int nextTileY = (tileNo + 1) / preset.viewColumns;
-                        int nextTileX = (tileNo + 1) % preset.viewColumns;
+                        int viewY = viewNo / preset.viewColumns;
+                        int viewX = viewNo % preset.viewColumns;
+
+                        // Copy the pixel color as a comparison color
+                        Color prevPixelColor = pixelColor;
                         
                         // RGB for the current view
-                        Color color = pixels[
-                            (tileY * preset.viewHeight+ v) * texture.width + (tileX * preset.viewWidth + u)
+                        pixelColor = pixels[
+                            (viewY * preset.viewHeight+ v) * texture.width + (viewX * preset.viewWidth + u)
                         ];
                         
-                        // RGB for the next view
-                        Color nextTileColor = pixels[
-                            (nextTileY * preset.viewHeight+ v) * texture.width + (nextTileX * preset.viewWidth + u)
-                        ];
+                        // In the first view, only extracts the color of the comparison.
+                        if (viewNo < 1) continue;
                         
                         // Difference
-                        Color diff = color - nextTileColor;
+                        Color diff = pixelColor - prevPixelColor;
                         
                         // Squared Difference
                         Color variance = diff * diff;

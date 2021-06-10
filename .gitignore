@@ -42,3 +42,4 @@ sysinfo.txt
 *.sln.meta
 
 .vsconfig
+.*/
