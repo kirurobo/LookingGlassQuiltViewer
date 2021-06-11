@@ -1076,10 +1076,10 @@ public class QuiltFileLoader : MonoBehaviour
                         Color diff = pixelColor - prevPixelColor;
                         
                         // Squared Difference
-                        Color variance = diff * diff;
+                        Color sd = diff * diff;
 
-                        // Sum of Squared Difference (RGB each also total)
-                        score[presetIndex] += (variance.r + variance.g + variance.b);
+                        // Sum of Squared Difference (RGB channels are summed independently)
+                        score[presetIndex] += (sd.r + sd.g + sd.b);
                     }
                 }
             }
