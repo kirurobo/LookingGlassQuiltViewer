@@ -613,7 +613,7 @@ public class QuiltFileLoader : MonoBehaviour
 
         // 書き出し
         System.IO.File.WriteAllBytes(file, rawData);
-        Debug.Log("Saved " + file);
+        OutputLog("Saved " + file);
 
         // 保存したというメッセージを表示
         ShowMessage("Saved " + file);
@@ -660,7 +660,7 @@ public class QuiltFileLoader : MonoBehaviour
             }
 
             string uri = new System.Uri(path).AbsoluteUri;
-            //Debug.Log("Loading: " + uri);
+            //OutputLog("Loading: " + uri);
 
             StartCoroutine("LoadImageFileCoroutine", uri);
         }
@@ -692,7 +692,7 @@ public class QuiltFileLoader : MonoBehaviour
         holoplay.quiltRT.filterMode = FilterMode.Trilinear;
         holoplay.SetupQuilt();
 
-        //Debug.Log("Estimaged tiling: " + holoplay.quiltSettings.numViews);     // 選択されたTiling
+        //OutputLog("Estimaged tiling: " + holoplay.quiltSettings.numViews);     // 選択されたTiling
 
     
         // 念のため毎回GCをしてみる…
@@ -735,7 +735,7 @@ public class QuiltFileLoader : MonoBehaviour
 
         ShowMessage("Loading the movie......", 0.5f);
         yield return new WaitForSecondsRealtime(0.5f);  // フレームが表示されそうな時間、強制的に待つ
-        //Debug.Log("Play movie");
+        //OutputLog("Play movie");
 
         // Seek
         videoPlayer.frame = 0;
@@ -777,7 +777,7 @@ public class QuiltFileLoader : MonoBehaviour
 
             holoplay.customQuiltSettings = GetTilingType(texture);
             holoplay.SetupQuilt();
-            //Debug.Log("Estimaged tiling: " + holoplay.customQuiltSettings.numViews);     // 選択されたTiling
+            //OutputLog("Estimaged tiling: " + holoplay.customQuiltSettings.numViews);     // 選択されたTiling
 
             holoplay.overrideQuilt = videoRenderTexture;
             holoplay.quiltRT.filterMode = FilterMode.Bilinear;
@@ -867,7 +867,7 @@ public class QuiltFileLoader : MonoBehaviour
             {
                 files.Sort();   // パスの順に並び替え
                 currentIndex = files.IndexOf(currentFile);
-                //Debug.Log("Index: " + currentIndex);
+                //OutputLog("Index: " + currentIndex);
             }
         }
 
@@ -1090,7 +1090,7 @@ public class QuiltFileLoader : MonoBehaviour
         float minScore = float.MaxValue;
         for (int i = 0; i < tilingPresets.Count; i++)
         {
-            Debug.Log("Index: " + i + " Order: " + tilingPresets[i].viewColumns + " x " + tilingPresets[i].viewRows + " : " + score[i]);
+            OutputLog("Index: " + i + " Order: " + tilingPresets[i].viewColumns + " x " + tilingPresets[i].viewRows + " : " + score[i]);
 
             if (minScore > score[i])
             {
@@ -1112,7 +1112,13 @@ public class QuiltFileLoader : MonoBehaviour
             }
         }
         
-        Debug.Log("Selected preset: " + selectedIndex + " Order: " + tilingPresets[selectedIndex].viewColumns + " x " + tilingPresets[selectedIndex].viewRows);
+        OutputLog("Selected preset: " + selectedIndex + " Order: " + tilingPresets[selectedIndex].viewColumns + " x " + tilingPresets[selectedIndex].viewRows);
         return tilingPresets[selectedIndex];
+    }
+    
+    [System.Diagnostics.Conditional("DEVELOPMENT_BUILD")]
+    private void OutputLog(string text)
+    {
+        Debug.Log(text);
     }
 }
