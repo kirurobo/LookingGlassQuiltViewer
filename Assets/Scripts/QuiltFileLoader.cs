@@ -361,6 +361,18 @@ public class QuiltFileLoader : MonoBehaviour
         UpdateFileInfo();
     }
 
+    private void UpdatePreview2D()
+    {
+        // Looking Glass が見つかっていなければ、強制的に preview2D を有効とする
+        if (holoplay && !holoplay.preview2D)
+        {
+            if (holoplay.cal.serial == "")
+            {
+                holoplay.preview2D = true;
+            }
+        }
+    }
+
     /// <summary>
     /// スライドショーの自動めくり処理
     /// </summary>
@@ -601,7 +613,7 @@ public class QuiltFileLoader : MonoBehaviour
 
         // 書き出し
         System.IO.File.WriteAllBytes(file, rawData);
-        Debug.Log("Saved " + file);
+        OutputLog("Saved " + file);
 
         // 保存したというメッセージを表示
         ShowMessage("Saved " + file);
@@ -648,10 +660,13 @@ public class QuiltFileLoader : MonoBehaviour
             }
 
             string uri = new System.Uri(path).AbsoluteUri;
-            //Debug.Log("Loading: " + uri);
+            //OutputLog("Loading: " + uri);
 
             StartCoroutine("LoadImageFileCoroutine", uri);
         }
+        
+        // 強制2D化はファイルを開くタイミングでチェック
+        //UpdatePreview2D();
     }
 
     /// <summary>
@@ -677,7 +692,7 @@ public class QuiltFileLoader : MonoBehaviour
         holoplay.quiltRT.filterMode = FilterMode.Trilinear;
         holoplay.SetupQuilt();
 
-        //Debug.Log("Estimaged tiling: " + holoplay.quiltSettings.numViews);     // 選択されたTiling
+        //OutputLog("Estimaged tiling: " + holoplay.quiltSettings.numViews);     // 選択されたTiling
 
     
         // 念のため毎回GCをしてみる…
@@ -720,7 +735,7 @@ public class QuiltFileLoader : MonoBehaviour
 
         ShowMessage("Loading the movie......", 0.5f);
         yield return new WaitForSecondsRealtime(0.5f);  // フレームが表示されそうな時間、強制的に待つ
-        //Debug.Log("Play movie");
+        //OutputLog("Play movie");
 
         // Seek
         videoPlayer.frame = 0;
@@ -762,7 +777,7 @@ public class QuiltFileLoader : MonoBehaviour
 
             holoplay.customQuiltSettings = GetTilingType(texture);
             holoplay.SetupQuilt();
-            //Debug.Log("Estimaged tiling: " + holoplay.customQuiltSettings.numViews);     // 選択されたTiling
+            //OutputLog("Estimaged tiling: " + holoplay.customQuiltSettings.numViews);     // 選択されたTiling
 
             holoplay.overrideQuilt = videoRenderTexture;
             holoplay.quiltRT.filterMode = FilterMode.Bilinear;
@@ -852,7 +867,7 @@ public class QuiltFileLoader : MonoBehaviour
             {
                 files.Sort();   // パスの順に並び替え
                 currentIndex = files.IndexOf(currentFile);
-                //Debug.Log("Index: " + currentIndex);
+                //OutputLog("Index: " + currentIndex);
             }
         }
 
@@ -1029,38 +1044,45 @@ public class QuiltFileLoader : MonoBehaviour
         int skip = texture.width / 512;     // 固定値 4 としてもでも動いたが、それだと4096pxのとき遅い
         if (skip < 1) skip = 1;             // 最低1はないと無限ループとなってしまう
 
-        // Tiling候補ごとに類似度を求める
-        int index = 0;
-        foreach (var preset in tilingPresets)
+        // Calculate the score for each Tiling preset
+        for (int presetIndex = 0; presetIndex < tilingPresets.Count; presetIndex++)
         {
-            score[index] = 0;
+            var preset = tilingPresets[presetIndex];
+            score[presetIndex] = 0;
+            
+            // Loop for each sample position in a view. It's not necessary to look at all pixels.
             for (int v = 0; v < preset.viewHeight; v += skip)
             {
                 for (int u = 0; u < preset.viewWidth; u += skip)
                 {
-                    // 中央タイルの画素を平均値の代わりに利用する
-                    //   （各タイル間ではわずかな違いしかないと仮定）
-                    int centerTileY = preset.viewRows / 2;
-                    int centerTileX = preset.viewColumns / 2;
-                    Color average = pixels[(centerTileY * preset.viewHeight+ v) * texture.width + (centerTileX * preset.viewWidth + u)];
-
-                    // 求めた平均を使い、分散を出す
-                    Color variance = Color.clear;
-                    for (int y = 0; y < preset.viewRows; y++)
+                    Color pixelColor = Color.black;
+                    for (int viewNo = 0; viewNo < preset.numViews; viewNo++)
                     {
-                        for (int x = 0; x < preset.viewColumns; x++)
-                        {
-                            Color color = pixels[(y * preset.viewHeight+ v) * texture.width + (x * preset.viewWidth + u)];
-                            Color diff = color - average;
-                            variance += diff * diff;
-                        }
-                    }
+                        int viewY = viewNo / preset.viewColumns;
+                        int viewX = viewNo % preset.viewColumns;
 
-                    // 分散の合計(SSD)を求める
-                    score[index] += (variance.r + variance.g + variance.b);
+                        // Copy the pixel color as a comparison color
+                        Color prevPixelColor = pixelColor;
+                        
+                        // RGB for the current view
+                        pixelColor = pixels[
+                            (viewY * preset.viewHeight+ v) * texture.width + (viewX * preset.viewWidth + u)
+                        ];
+                        
+                        // In the first view, only extracts the color of the comparison.
+                        if (viewNo < 1) continue;
+                        
+                        // Difference
+                        Color diff = pixelColor - prevPixelColor;
+                        
+                        // Squared Difference
+                        Color variance = diff * diff;
+
+                        // Sum of Squared Difference (RGB each also total)
+                        score[presetIndex] += (variance.r + variance.g + variance.b);
+                    }
                 }
             }
-            index++;
         }
 
         // 最も評価値が良かったTilingを選択
@@ -1068,7 +1090,7 @@ public class QuiltFileLoader : MonoBehaviour
         float minScore = float.MaxValue;
         for (int i = 0; i < tilingPresets.Count; i++)
         {
-            //Debug.Log("Index: " + i + " Order: " + tilingPresets[i].viewColumns + ", " + tilingPresets[i].viewRows + " : " + score[i]);
+            OutputLog("Index: " + i + " Order: " + tilingPresets[i].viewColumns + " x " + tilingPresets[i].viewRows + " : " + score[i]);
 
             if (minScore > score[i])
             {
@@ -1089,7 +1111,14 @@ public class QuiltFileLoader : MonoBehaviour
                 }
             }
         }
-        //Debug.Log(selectedIndex);
+        
+        OutputLog("Selected preset: " + selectedIndex + " Order: " + tilingPresets[selectedIndex].viewColumns + " x " + tilingPresets[selectedIndex].viewRows);
         return tilingPresets[selectedIndex];
+    }
+    
+    [System.Diagnostics.Conditional("DEVELOPMENT_BUILD")]
+    private void OutputLog(string text)
+    {
+        Debug.Log(text);
     }
 }
